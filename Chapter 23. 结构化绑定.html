@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>结构化绑定</title>
+    <!-- 0. 全局样式表 -->
+    <link rel="stylesheet" href="css/global.css">
+    <!-- 1. 引入 Highlight.js 样式表（这里使用默认主题） -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <!-- 2. 引入 Highlight.js 核心库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- 3. 按需引入 C++ 语言插件（如果使用 ES6 模块，则可以直接使用核心库的内置支持，无需单独引入） -->
+    <!--
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+    -->
+</head>
+<body>
+    <article>
+    [页眉: 23. 结构化绑定]
+        1) 解构赋值：
+            ①什么是可解构对象：［i:可解构对象是指可以通过单条赋值语句快速提取各成员/元素值的对象；］
+            
+            ②常见的可解构对象有：［i:常见的可解构对象有数组、聚合体、元组类型，以及自定义的支持解构的非聚合类型；它们各自的含义如下<br>
+                ＞a. 数组：是指 std::array 数组而不是普通数组；<br>
+                ＞b. 聚合体：不能有私有成员、不能有用户自定义的构造函数、不能有基类（C++17 之后可以有同样是可解构类型的基类）、不能有虚函数和虚基类；<br>
+                ＞c. 元组：是指 std::pair、std::tuple 类型；<br>
+                ＞d. 自定义的支持解构的非聚合类型：让非聚合类型支持解构的方法详见后文；
+            ］
+
+            ③解构赋值：［i:解构赋值泛指<!--从可解构对象中通过单条赋值语句快速提取数据；-->将可解构对象的各个成员或元素通过单条赋值语句赋值给现有对象（或绑定给指定的引用）；<!--其要点如下<br>
+            ＞a. 可解构对象：包括数组（std::array）、聚合体（不能有私有成员、不能有用户自定义的构造函数、C++17 之前不能有基类、C++17 之后可以有同样是可解构类型的基类、不能有虚函数和虚基类）、元组（包括 std::pair、std::tuple 以及其他可解构的自定义元组类型）；<br>
+            ＞b. 赋值：可以是基本类型的简单赋值，也可以是引用绑定、自定义类型的拷贝或移动；-->「i:例如」］［b:「b:
+            <xmp>
+            #include <iostream>
+            #include <tuple>
+            #include <array>
+            #include <string>
+
+            struct {
+                std::string _name;
+                int _age;
+                double _score;
+            } s = {"张三", 18, 99.5};
+            // 没有私有成员（解构体成员默认都是公有）、没有自定义构造、没有基类、没有虚函数虚基类，因此是聚合体、可解构类型
+
+            class Demo {
+            public:
+                std::string _name;
+                int _age;
+                double _score;
+            };
+            Demo obj = {"张三", 18, 99.5};
+            // 没有私有成员、没有自定义构造、没有基类、没有虚函数虚基类，因此是聚合体、可解构类型
+
+            std::array<double, 3> arr = {99.0, 96.5, 99.5};
+            std::pair<std::string, int> p = {"张三", 18};
+            std::tuple<std::string, int, double> tup = {"张三", 18, 99.5};
+            // std::array 数组、std::pair 元组、std::tuple 元组都是可解构类型
+
+            int main(int argc, char** argv) {
+                std::string name; 
+                int age; 
+                double score;
+
+                std::string name1 = s._name;
+                int age1 = s._age;
+                double score1 = s._score;
+                // 通过逐个赋值的方式，提取结构体各成员的值做为新定义变量的初始值
+                // 虽然 s 是可解构类型，但不是通过单条赋值语句来提取各个成员变量的值，因此不是解构赋值
+
+                std::string name2 = std::get<0>(tup);
+                int age2 = std::get<1>(tup);
+                double score2 = std::get<2>(tup);
+                // 通过逐个赋值的方式，提取元组各元素的值做为新定义变量的初始值
+                // 虽然 tup 是可解构类型，但不是通过单条赋值语句来提取各个成员变量的值，因此不是解构赋值
+                
+                std::string& name3 = obj._name;
+                int& age3 = obj._age;
+                double& score3 = obj._score;
+                // 通过逐个赋值的方式，将新定义的各个引用绑定到结构体的各个成员变量
+                // 虽然 obj 是可解构类型，但不是通过单条赋值语句来提取各个成员变量的值，因此不是解构赋值
+
+                name = s._name;
+                age = s._age;
+                score = s._score;
+                // 通过逐个赋值的方式，提取结构体各成员的值赋值给现有对象
+                // 虽然 s 是可解构类型，但不是通过单条赋值语句来提取各个成员变量的值，因此不是解构赋值
+
+                std::tie(name, age) = p;
+                std::tie(name, age, score) = tup;
+                // 通过 std::tie() 提取元组各元素的值到现有变量
+                // p 和 tup 都是可解构类型，且都是通过单条赋值语句提取各元素的值，因此是解构赋值
+                // 但 std::tie() 无法快速提取其他聚合类型对象中的数据，如聚合体和 std::array 数组，例如 std::tie(name, age, score) = s 会编译失败
+
+                std::tie(name, age, score) = std::tie(s._name, s._age, s._score);
+                // 这虽然简化了上面第一组案例逐个赋值的代码、通过一条赋值语句来提取结构体中各成员的值，右操作数是元组、是可解构类型
+                // 但这属于对一个新元组的解构赋值、而不是结构体 s 的解构赋值      
+                
+                return 0;
+            }
+            </xmp>
+            <!--<xmp>
+            #include <iostream>
+            #include <tuple>
+            #include <string>
+
+            struct MyStruct {
+                int x;
+                double y;
+                bool b;
+                std::string str;
+            };
+
+            int main() {
+                MyStruct s = {1, 1.23, true, "hello"};
+                std::tuple tup{1, 1.23, true, "hello"};
+
+                int x; double y; bool b; std::string str;
+                
+                // 1) 传统的提取数据的方式
+                // a. 提取结构体各成员的值做为新定义变量的初始值
+                int x1 = s.x;
+                double y1 = s.y;
+                bool b1 = s.b;
+                std::string str1 = s.str;
+
+                // b. 以引用的形式提取结构体各成员的值
+                int& rx1 = s.x;
+                double& ry1 = s.y;
+                bool& rb1 = s.b;
+                std::string& rstr1 = s.str;
+                
+                // c. 提取元组各元素的值到现有变量 x, y, b, str
+                x = std::get<0>(tup);
+                y = std::get<1>(tup);
+                b = std::get<2>(tup);
+                str = std::get<3>(tup);
+
+                std::cout << x1 << " " << y1 << " " << b1 << " " << str1 << std::endl;
+                std::cout << x << " " << y << " " << b << " " << str << std::endl;
+                
+                // 2) 使用 std::tie() 提取数据
+                // a. 提取元组中各元素的值到现有变量 x, y, b, str
+                std::tie(x, y, b, str) = tup; // 满足解构赋值快速提取数据的要求，因此属于解构赋值
+
+                // b. 只能提取元素，无法提取其他类型，即以下语句将编译失败
+                std::tie(x, y, b, str) = s;
+
+                // c. 以下语法虽然也能将结构体各成员的值提取到现有变量，且也比较简单，但这不属于对结构体的解构赋值，即右操作数必须是要解构的对象，因此这实际上是对元组的解构赋值
+                std::tie(x, y, b, str) = std::tie(s.x, s.y, s.b, s.str);
+
+                // d. 无法同时定义变量，只能提取到现有变量
+
+                std::cout << x << " " << y << " " << b << " " << str << std::endl;
+                
+                // 3) 使用 C++17 结构化绑定提取数据
+                // a. 语法格式为“类型 [标识符1, 标识符2, ...] = 可解构类型”，例如
+                auto [x31, y31, b31, str31] = s;
+                auto [x32, y32, b32, str32] = tup; // 满足解构赋值快速提取数据的要求，因此属于解构赋值
+
+                // b. 标识符1, 标识符2, ... 并不代表新变量，而是可解构类型中各成员或元素的引用，即
+                std::cout << (&x31 == &s.x) << std::endl; // true
+
+                // c. 无法提取到现有对象、即不存在以下形式的语法
+                // [x, y, b, str] = s;
+
+                std::cout << x31 << " " << y31 << " " << b31 << " " << str31 << "\n"
+                    << x32 << " " << y32 << " " << b32 << " " << str32
+                    << std::endl;
+
+                return 0;
+            }
+            </xmp>-->
+        」］
+
+        
+        2) 结构化绑定（C++17）：
+            ①什么是结构化绑定：［i:C++17 引入的一种新的解构赋值方式，即能将可解构对象的各个元素或成员通过单条赋值语句绑定给指定的引用；］
+
+            ②结构化绑定的语法格式：［b:
+                <xmp>
+                类型 [标识符1, 标识符2, ...] = 可解构对象;
+                /*
+                 * 1) 类型：
+                 *   a. 一般使用 auto 自动类型推导；
+                 *   b. 也可以结合 const 和引用符号来精确控制绑定行为（详见后文）；<br>
+                 * 2) 标识符1, 标识符2, ... 并不代表新对象，而是引用或别名（不一定是原可解构对象各成员或元素的引用，详见后文）； 
+                 * 3) 可解构对象：
+                 *   a. std::array 数组；
+                 *   b. 聚合体，即满足不存在私有成员、不存在用户自定义的构造函数、不能有基类（C++17 之后可以有也是聚合类型的基类）、不存在虚基类和虚函数的类或结构体；
+                 *   c. 元组，包括 std::pair、std::tuple；
+                 *   d. 自定义的支持解构的非聚合类型，让一个自定义的非聚合类型支持解构的规则详见后文；
+                 */
+                </xmp>
+                「i:例如」「b:
+                    <xmp>
+                    #include <iostream>
+                    #include <tuple>
+                    #include <array>
+                    #include <string>
+
+                    struct {
+                        std::string _name;
+                        int _age;
+                        double _score;
+                    } s = {"张三", 18, 99.5};
+                    // 没有私有成员（解构体成员默认都是公有）、没有自定义构造、没有基类、没有虚函数虚基类，因此是聚合体、可解构类型
+
+                    class Demo {
+                    public:
+                        std::string _name;
+                        int _age;
+                        double _score;
+                    };
+                    Demo obj = {"张三", 18, 99.5};
+                    // 没有私有成员、没有自定义构造、没有基类、没有虚函数虚基类，因此是聚合体、可解构类型
+
+                    std::array<double, 3> arr = {99.0, 96.5, 99.5};
+                    std::pair<std::string, int> p = {"张三", 18};
+                    std::tuple<std::string, int, double> tup = {"张三", 18, 99.5};
+                    // std::array 数组、std::pair 元组、std::tuple 元组都是可解构类型
+
+                    int main(int argc, char** argv) {
+                        std::string name; 
+                        int age; 
+                        double score;
+
+                        std::string name1 = s._name;
+                        int age1 = s._age;
+                        double score1 = s._score;
+                        // 通过逐个赋值的方式，提取结构体各成员的值做为新定义变量的初始值
+                        // 虽然 s 是可解构类型，但不是通过单条赋值语句来提取各个成员变量的值，因此不是解构赋值
+
+                        std::string name2 = std::get<0>(tup);
+                        int age2 = std::get<1>(tup);
+                        double score2 = std::get<2>(tup);
+                        // 通过逐个赋值的方式，提取元组各元素的值做为新定义变量的初始值
+                        // 虽然 tup 是可解构类型，但不是通过单条赋值语句来提取各个成员变量的值，因此不是解构赋值
+                        
+                        std::string& name3 = obj._name;
+                        int& age3 = obj._age;
+                        double& score3 = obj._score;
+                        // 通过逐个赋值的方式，将新定义的各个引用绑定到结构体的各个成员变量
+                        // 虽然 obj 是可解构类型，但不是通过单条赋值语句来提取各个成员变量的值，因此不是解构赋值
+
+                        name = s._name;
+                        age = s._age;
+                        score = s._score;
+                        // 通过逐个赋值的方式，提取结构体各成员的值赋值给现有对象
+                        // 虽然 s 是可解构类型，但不是通过单条赋值语句来提取各个成员变量的值，因此不是解构赋值
+
+                        std::tie(name, age) = p;
+                        std::tie(name, age, score) = tup;
+                        // 通过 std::tie() 提取元组各元素的值到现有变量
+                        // p 和 tup 都是可解构类型，且都是通过单条赋值语句提取各元素的值，因此是解构赋值
+                        // 但 std::tie() 无法快速提取其他聚合类型对象中的数据，如聚合体和 std::array 数组，例如 std::tie(name, age, score) = s 会编译失败
+
+                        std::tie(name, age, score) = std::tie(s._name, s._age, s._score);
+                        // 这虽然简化了上面第一组案例逐个赋值的代码、通过一条赋值语句来提取结构体中各成员的值，右操作数是元组、是可解构类型
+                        // 但这属于对一个新元组的解构赋值、而不是结构体 s 的解构赋值
+
+                        auto [name4, age4, score4] = s;
+                        auto [name5, age5, score5] = obj;
+                        auto [score51, score52, score53] = arr;
+                        auto [name6, age6] = p;
+                        auto [name7, age7, score7] = tup;
+                        // 通过结构化绑定快速创建可解构类型对象各个成员/元素的引用
+                        // 以上所有要解构的对象都是可解构类型、且都是通过单条赋值语句提取各成员或元素的值，因此是解构赋值
+                        
+                        return 0;
+                    }
+                    </xmp>
+                」
+            ］
+
+            ③结构化绑定与 std::tie() 的区别：［i:有以下三点区别<br>
+                ＞a. C++17 结构化绑定语法语义更加明确；<br>
+                ＞b. C++17 结构化绑定支持解构的类型更多（数组、聚合体、元组、自定义的可解构的非聚合类型），而 std::tie() 只能解构元组；<br>
+                ＞c. C++17 结构化绑定是将可解构对象的各个元素或成员通过单条赋值语句绑定给指定的引用，可能不会创建副本，也不能提取数据到现有变量；而 std::tie() 是将可解构对象的各个成员或元素通过单条赋值语句赋值给指定的变量；
+            ］
+
+            ④结构化绑定的一般编译器实现：［i:结构化绑定的一般编译器实现<br>
+                ＞a. 若变量的类型不是引用类型，则先创建可解构对象的副本，再把它的各个成员或元素绑定给指定的引用；<br>
+                ＞b. 若变量的类型是引用类型，则不会创建可解构对象的副本，直接将它的各个成员或元素绑定给指定的引用；「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <array>
+                    
+                std::array<int, 2> arr = {1, 2};
+                struct {
+                    std::string _str; 
+                    double _f; 
+                } s = {"abc123", 2.0};
+
+                int main(int argc, char** argv) {
+                    auto [m, n] = arr;
+                    auto& [rm, rn] = arr;
+                    std::cout << std::boolalpha
+                        << (&m == &arr[0]) << " "
+                        << (&n == &arr[1]) << " "
+                        << (&rm == &arr[0]) << " "
+                        << (&rn == &arr[1]) << " "
+                        << std::endl; 
+                    // false, false, true, true  
+                    
+                    auto [str, f] = s;
+                    auto& [rstr, rf] = s;
+                    std::cout << std::boolalpha
+                        << (&str == &s._str) << " "
+                        << (&f == &s._f) << " "
+                        << (&rstr == &s._str) << " "
+                        << (&rf == &s._f) << " "
+                        << std::endl; 
+                    // false, false, true, true
+
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ⑤使用引用符号与 const 修饰符：［i:使用引用符号和 const 修饰符存在以下各种情况<br>
+                ＞a. auto：对于左值可解构对象，绑定到它的副本的各成员或元素；对于右值可解构对象，直接绑定到它的各成员或元素；<br>
+                ＞b. auto&：只能直接绑定到左值可解构对象的各成员或元素；<br>
+                ＞c. auto&&：直接绑定到可解构对象的各成员或元素；<br>
+                ＞d. const auto：对于左值可解构对象，绑定到它的副本的各成员或元素；对于右值可解构对象，直接绑定到它的各成员或元素；而且不能通过引用来修改这些成员或元素；<br>
+                ＞e. const auto&：直接绑定到可解构对象的各成员或元素，但是不能通过引用来修改这些成员或元素；<br>
+                ＞f. const auto&&：只能直接绑定到右值可解构对象的各成员或元素，但是不能通过引用来修改这些成员或元素；
+                <xmp>
+                +==============+================+==============+===============+
+                |              | lvalue/rvalue  | create copy  | modify origin |
+                +==============+================+==============+===============+
+                | auto         | lvalue, rvalue | lvalue - yes | lvalue - no   |
+                |              |                | rvalue - no  | rvalue - yes  |
+                +--------------+----------------+--------------+---------------+
+                | auto&        | lvalue         | no           | yes           |
+                +--------------+----------------+--------------+---------------+
+                | auto&&       | lvalue, rvalue | no           | yes           |
+                +--------------+----------------+--------------+---------------+
+                | const auto   | lvalue, rvalue | lvalue - yes | no            |
+                |              |                | rvalue - no  |               |
+                +--------------+----------------+--------------+---------------+
+                | const auto&  | lvalue, rvalue | no           | no            |
+                +--------------+----------------+--------------+---------------+
+                | const auto&& | rvalue         | no           | no            |
+                +--------------+----------------+--------------+---------------+
+                </xmp>
+                「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <tuple>
+
+                class Demo {
+                public:
+                    Demo() {}
+                    Demo(const Demo& other) { 
+                        std::cout << "Demo copy constructor" << std::endl;
+                    }
+                    Demo& operator=(const Demo& other) {
+                        std::cout << "Demo copy assign" << std::endl;
+                        return *this; 
+                    }
+                };
+
+                int main(int argc, char** argv) {
+                    // 1) 测试 auto
+                    {
+                        std::tuple<int, double> tup(1, 1.23);
+                        Demo obj;
+                        std::cout << "test auto: ----------------" << std::endl;
+
+                        // a. 是否能绑定左值和右值可解构对象 
+                        auto [n1, f1] = tup;
+                        auto [n2, f2] = std::make_tuple<int, double>(1, 1.23);
+                        
+                        // b. 是否直接绑定到可解构对象各元素或成员
+                        std::cout << (&n1 == &std::get<0>(tup)) << std::endl; // 0
+                        std::tuple<int, Demo> tup_tmp(1, obj);
+                        auto [n3, obj_tmp3] = tup_tmp; // 输出二次拷贝构造提示，第一次是要把 obj 拷贝给 tup_tmp 对象的第二个元素，第二次是因为创建了可解构对象的的副本
+                        auto [n4, obj_tmp4] = std::make_tuple(1, obj); // 输出一次拷贝构造提示，即把 obj 拷贝给这个临时 tuple 对象的第二个元素，没有输出第二次是因为可解构对象是一个右值，不会再创建它的副本
+                        
+                        // c. 是否能通过引用修改可解构对象的对应元素或成员
+                        n1 = 2;
+                        std::cout << std::get<0>(tup) << std::endl; // 1，即无法修改原左值可解构对象，只能修改它的副本
+                    }
+                    
+                    // 2) 测试 auto&
+                    {
+                        std::tuple<int, double> tup(1, 1.23);
+                        Demo obj;
+                        std::cout << "test auto&: ----------------" << std::endl;
+
+                        // a. 是否能绑定左值和右值可解构对象 
+                        auto& [n1, f1] = tup;
+                        // auto& [n2, f2] = std::make_tuple<int, double>(1, 1.23); // 编译失败
+                        
+                        // b. 是否直接绑定到可解构对象各元素或成员
+                        std::cout << (&n1 == &std::get<0>(tup)) << std::endl; // 1
+                        std::tuple<int, Demo> tup_tmp(1, obj);
+                        auto& [n3, obj3] = tup_tmp; // 输出一次拷贝构造或拷贝赋值的提示，因为要把 obj 拷贝给这个临时 tuple 对象的第二个元素，没有输出两次拷贝构造或拷贝赋值的提示，说明确实直接绑定到了原可解构对象而没有创建它的副本
+                        
+                        // c. 是否能通过引用修改可解构对象的对应元素或成员
+                        n1 = 2;
+                        std::cout << std::get<0>(tup) << std::endl; // 2
+                    }
+
+                    // 3) 测试 auto&&
+                    {
+                        std::tuple<int, double> tup(1, 1.23);
+                        Demo obj;
+                        std::cout << "test auto&&: ----------------" << std::endl;
+
+                        // a. 是否能绑定左值和右值可解构对象 
+                        auto&& [n1, f1] = tup;
+                        auto&& [n2, f2] = std::make_tuple<int, double>(1, 1.23);
+                        
+                        // b. 是否直接绑定到可解构对象各元素或成员
+                        std::cout << (&n1 == &std::get<0>(tup)) << std::endl; // 1
+                        std::tuple<int, Demo> tup_tmp(1, obj);
+                        auto&& [n3, obj_tmp3] = tup_tmp; // 输出一次拷贝构造提示，因为要把 obj 拷贝给 tup_tmp 对象的第二个元素，没有输出二次 Demo 类型拷贝构造或拷贝赋值的提示，说明直接绑定到原可解构对象而没有创建它的副本
+                        auto&& [n4, obj_tmp4] = std::make_tuple(1, obj); // 输出一次拷贝构造提示，因为要把 obj 拷贝给这个临时 tuple 对象的第二个元素，没有输出二次 Demo 类型拷贝构造或拷贝赋值的提示，说明直接绑定到原可解构对象而没有创建它的副本
+                        
+                        // c. 是否能通过引用修改可解构对象的对应元素或成员
+                        n1 = 2;
+                        std::cout << std::get<0>(tup) << std::endl; // 2
+                    }
+
+                    // 4) 测试 const auto
+                    {
+                        std::tuple<int, double> tup(1, 1.23);
+                        Demo obj;
+                        std::cout << "test const auto: ----------------" << std::endl;
+
+                        // a. 是否能绑定左值和右值可解构对象 
+                        const auto [n1, f1] = tup;
+                        const auto [n2, f2] = std::make_tuple<int, double>(1, 1.23);
+                        
+                        // b. 是否直接绑定到可解构对象各元素或成员
+                        std::cout << (&n1 == &std::get<0>(tup)) << std::endl; // 0
+                        std::tuple<int, Demo> tup_tmp(1, obj);
+                        const auto [n3, obj_tmp3] = tup_tmp; // 输出二次拷贝构造提示，第一次是要把 obj 拷贝给 tup_tmp 对象的第二个元素，第二次是因为创建了可解构对象的的副本
+                        const auto [n4, obj_tmp4] = std::make_tuple(1, obj); // 输出一次拷贝构造提示，即把 obj 拷贝给这个临时 tuple 对象的第二个元素，没有输出第二次是因为可解构对象是一个右值，不会再创建它的副本
+                        
+                        // c. 是否能通过引用修改原可解构对象的对应元素或成员
+                        // n1 = 2; // 编译失败，而且因为 tup 是左值可解构对象，即使编译成功修改的也是它的副本
+                        // n2 = 2; // 编译失败
+                    }
+
+                    // 5) 测试 const auto&
+                    {
+                        std::tuple<int, double> tup(1, 1.23);
+                        Demo obj;
+                        std::cout << "test const auto&: ----------------" << std::endl;
+
+                        // a. 是否能绑定左值和右值可解构对象 
+                        const auto& [n1, f1] = tup;
+                        const auto& [n2, f2] = std::make_tuple<int, double>(1, 1.23);
+                        
+                        // b. 是否直接绑定到可解构对象各元素或成员
+                        std::cout << (&n1 == &std::get<0>(tup)) << std::endl; // 1
+                        std::tuple<int, Demo> tup_tmp(1, obj);
+                        const auto& [n3, obj_tmp3] = tup_tmp; // 输出一次拷贝构造提示，因为是要把 obj 拷贝给 tup_tmp 对象的第二个元素，没有第二次是因为直接绑定到原可解构对象
+                        const auto& [n4, obj_tmp4] = std::make_tuple(1, obj); // 输出一次拷贝构造提示，因为要把 obj 拷贝给这个临时 tuple 对象的第二个元素，没有输出第二次是因为直接绑定到原可解构对象
+                        
+                        // c. 是否能通过引用修改原可解构对象的对应元素或成员
+                        // n1 = 2; // 编译失败
+                        // n2 = 2; // 编译失败
+                    }
+
+                    // 5) 测试 const auto&&
+                    {
+                        std::tuple<int, double> tup(1, 1.23);
+                        Demo obj;
+                        std::cout << "test const auto&&: ----------------" << std::endl;
+
+                        // a. 是否能绑定左值和右值可解构对象 
+                        // const auto&& [n1, f1] = tup; 编译失败
+                        const auto&& [n2, f2] = std::make_tuple<int, double>(1, 1.23);
+                        
+                        // b. 是否直接绑定到可解构对象各元素或成员
+                        const auto&& [n3, obj_tmp3] = std::make_tuple(1, obj); // 输出一次拷贝构造提示，因为要把 obj 拷贝给这个临时 tuple 对象的第二个元素，没有输出第二次是因为直接绑定到原可解构对象
+                        
+                        // c. 是否能通过引用修改原可解构对象的对应元素或成员
+                        // n1 = 2; // 编译失败
+                        // n2 = 2; // 编译失败
+                    }
+
+                    return 0;
+                }
+                </xmp>    
+            」］
+
+        3) *让自定义非聚合类型支持结构化绑定：
+            ①让非聚合类型支持结构化绑定：［i:让自定义的非聚合类型支持解构赋值需要完成以下三点<br>
+                ＞a. 针对当前非聚合类型定义`get&lt;>()`函数，让`std::get&lt;N>(当前非聚合类型的对象)`能够获取当前非聚合类型对象的索引为 N 的成员或元素；也可以定义`get&lt;>()`成员函数，让当前非聚合类型对象调用`get&lt;N>()`得到当前对象的索引为 N 的成员或元素；<br>
+                ＞b. 针对当前非聚合类型特化`std::tuple_size&lt;>`类模板，让`std::tuple_size&lt;当前非聚合类型>::value`能够获取当前非聚合类型的对象的成员或元素的个数；<br>
+                ＞c. 针对当前非聚合类型特化`std::tuple_element&lt;>`类模板，让`std::tuple_element&lt;N, 当前非聚合类型>::type`能获取第 N 个成员或元素的类型；
+            ］
+            
+            ②让以下类型支持结构化绑定：［qb:
+            <xmp>
+            class MyArray {
+            private:
+                int _arr[3];
+            public:
+                // 存在自定义的构造函数，MyArray 不再是聚合类型
+                MyArray(std::initializer_list<int> list) {
+                    int i = 0;
+                    for (int elem : list) {
+                        _arr[i++] = elem;
+                    }
+                }
+            };
+            </xmp>
+            <xmp>
+            template <class ...Types>
+            class MyTuple {
+                static_assert(
+                    ((std::is_object<Types>::value &&  // 非函数、非 void
+                    !std::is_reference<Types>::value && // 非引用
+                    !std::is_const<Types>::value && // 无 const 修饰
+                    !std::is_volatile<Types>::value && // 无 volatile 修饰
+                    !std::is_array<Types>::value) && ...), // 不是数组
+                    "All types in Types... must be non-array, non-reference, non-CV-qualified object types."
+                );
+            private:
+                std::tuple<Types...> _tup;
+            public:
+                MyTuple(Types... params) {
+                    _tup = std::tuple<Types...>(params...);
+                }
+            };
+            </xmp>
+            <xmp>
+            class Student {
+            private:
+                std::string _name;
+                int _age;
+                double _score;
+            public:
+                Student(const std::string &name, int age, double score) 
+                    :_name(name), _age(age), _score(score) 
+                {} // 存在自定义的构造函数，Student 不再是聚合类型
+            };
+            </xmp>
+            ］［b:答案为：
+            <xmp>
+            #include <iostream>
+
+            class MyArray {
+            private:
+                int _arr[3];
+            public:
+                // 存在自定义的构造函数，MyArray 不再是聚合类型
+                MyArray(std::initializer_list<int> list) {
+                    int i = 0;
+                    for (int elem : list) {
+                        _arr[i++] = elem;
+                    }
+                }
+
+                // 定义 get<>() 成员函数，让 stu.get<N>() 能获取索引为 N 的成员或元素
+                /*
+                template <std::size_t N> 
+                decltype(auto) get() {
+                    static_assert(N <= 2);
+                    return _arr[N];
+                }
+
+                template <std::size_t N> 
+                decltype(auto) get() const {
+                    static_assert(N <= 2);
+                    return _arr[N];
+                }
+                */
+                template <std::size_t N> 
+                int& get() & {
+                    static_assert(N <= 2);
+                    return _arr[N];
+                }
+
+                template <std::size_t N> 
+                const int& get() const& {
+                    static_assert(N <= 2);
+                    return _arr[N];
+                }
+
+                template <std::size_t N> 
+                int&& get() && {
+                    static_assert(N <= 2);
+                    return std::move(_arr[N]);
+                }
+            };
+
+            // 特化 std::tuple_size<> 类模板，让 std::tuple_size<MyArray>::value 能返回 MyArray 的元素个数
+            template <>
+            class std::tuple_size<MyArray> {
+            public:
+                constexpr static std::size_t value = 3;
+            };
+
+            // 特化 std::tuple_element<> 类模板，让 std::tuple_value<N, MyArray>::type 能代表索引为 N 的元素的类型
+            template <std::size_t N>
+            class std::tuple_element<N, MyArray> {
+                static_assert(N <= 2);
+            public:
+                using type = int;
+            };
+
+            int main(int argc, char** argv) {
+                MyArray arr = {1, 2, 3};
+                auto [n1, n2, n3] = arr;
+
+                std::cout << n1 << " " << n2 << " " << n3 << std::endl;
+
+                return 0;
+            }
+            </xmp>
+            <xmp>
+            #include <iostream>
+
+            template <class ...Types>
+            class MyTuple {
+                static_assert(
+                    ((std::is_object<Types>::value &&  // 非函数、非 void
+                    !std::is_reference<Types>::value && // 非引用
+                    !std::is_const<Types>::value && // 无 const 修饰
+                    !std::is_volatile<Types>::value && // 无 volatile 修饰
+                    !std::is_array<Types>::value) && ...), // 不是数组
+                    "All types in Types... must be non-array, non-reference, non-CV-qualified object types."
+                );
+            private:
+                std::tuple<Types...> _tup;
+            public:
+                MyTuple(Types... params) {
+                    _tup = std::tuple<Types...>(params...);
+                }
+
+                // 定义 get<>() 成员函数，让 tup.get<N>() 能获取索引为 N 的元素
+                template <std::size_t N>
+                auto& get() & noexcept {
+                    static_assert(N <= 2);
+                    return std::get<N>(_tup);
+                }
+
+                template <std::size_t N>
+                const auto& get() const& noexcept {
+                    static_assert(N <= 2);
+                    return std::get<N>(_tup);
+                }
+
+                template <std::size_t N>
+                auto&& get() && noexcept {
+                    static_assert(N <= 2);
+                    return std::move(std::get<N>(_tup));
+                }
+            };
+
+            // 特化 std::tuple_size<> 类模板，让 std::tuple_size<MyTuple>::value 能返回 MyTuple 对象元素个数
+            template <class ...Types>
+            class std::tuple_size<MyTuple<Types...>> {
+                static_assert(
+                    ((std::is_object<Types>::value &&  // 非函数、非 void
+                    !std::is_reference<Types>::value && // 非引用
+                    !std::is_const<Types>::value && // 无 const 修饰
+                    !std::is_volatile<Types>::value && // 无 volatile 修饰
+                    !std::is_array<Types>::value) && ...), // 不是数组
+                    "All types in Types... must be non-array, non-reference, non-CV-qualified object types."
+                );
+            public:
+                constexpr static std::size_t value = std::tuple_size<std::tuple<Types...>>::value;
+            };
+
+            // 特化 std::tuple_element<> 类模板，让 std::tuple_element<N, MyTuple>::type 能代表索引为 N 的元素的类型
+            template <std::size_t N, class ...Types>
+            class std::tuple_element<N, MyTuple<Types...>> {
+                static_assert(
+                    N <= 2 &&
+                    ((std::is_object<Types>::value &&  // 非函数、非 void
+                    !std::is_reference<Types>::value && // 非引用
+                    !std::is_const<Types>::value && // 无 const 修饰
+                    !std::is_volatile<Types>::value && // 无 volatile 修饰
+                    !std::is_array<Types>::value) && ...)
+                );
+            public:
+                using type = typename std::tuple_element<N, std::tuple<Types...>>::type;
+            };
+
+            int main(int argc, char** argv) {
+                MyTuple tup = {1, 1.23, "hello"};
+                auto [n, f, str] = tup;
+
+                std::cout << n << " " << f << " " << str << std::endl;
+
+                return 0;
+            }
+            </xmp>
+            <xmp>
+            #include <iostream>
+
+            class Student {
+            private:
+                std::string _name;
+                int _age;
+                double _score;
+            public:
+                Student(const std::string &name, int age, double score) 
+                    :_name(name), _age(age), _score(score) 
+                {} // 存在自定义的构造函数，Student 不再是聚合类型
+
+                // 1) 定义 get<>() 函数，让 get<N>(stu) 能获取第 N 个成员
+                // a. 左值版本
+                template <std::size_t N>
+                friend decltype(auto) get(Student &stu) noexcept {
+                    static_assert(N <= 2);
+
+                    if constexpr (N == 0) return stu._name;
+                    else if constexpr (N == 1) return stu._age;
+                    else if constexpr (N == 2) return stu._score;
+                }
+
+                // b. 常左值版本
+                template <std::size_t N>
+                friend decltype(auto) get(const Student &stu) noexcept {
+                    static_assert(N <= 2);
+
+                    if constexpr (N == 0) return stu._name;
+                    else if constexpr (N == 1) return stu._age;
+                    else if constexpr (N == 2) return stu._score;
+                }
+
+                // c. 右值版本
+                template<std::size_t N>
+                friend decltype(auto) get(Student&& stu) {
+                    static_assert(N <= 2);
+
+                    if constexpr (N == 0) return std::move(stu._name);
+                    else if constexpr (N == 1) return stu._age;
+                    else if constexpr (N == 2) return stu._score;
+                }
+            };
+
+            // 2) 特化 std::tuple_size<> 模板，让 std::tuple_size<Stuent>::value 能返回 Student 类型对象的元素或成员个数
+            template <>
+            class std::tuple_size<Student> {
+            public:
+                constexpr static size_t value = 3;
+            };
+
+            // 3) 特化 std::tuple_element<> 模板，让 std::tuple_element<N, Student>::type 代表索引为 N 的元素或成员的类型
+            template <size_t N>
+            class std::tuple_element<N, Student> {
+                static_assert(N <= 2);
+            public:
+                /*
+                using type = decltype(
+                    std::declval<
+                        std::conditional_t<N == 0, std::string,
+                            std::conditional_t<N == 1, int, 
+                                double
+                            >
+                        >
+                    >()
+                );
+                */
+                using type = std::conditional_t<N == 0, std::string,
+                    std::conditional_t<N == 1, int, 
+                        double
+                    >
+                >;
+                // std::declval<T>() 能在编译时尝试创建一个 T 类型的对象
+                // std::conditional<Condition, T1, T2>::type 能在编译时检查 Condition 是否为真，是则代表类型 T1，否则代表类型 T2
+            };
+
+            int main(int argc, char** argv) {
+                Student stu("ZhangSan", 18, 99.5);
+                auto [name, age, score] = stu;
+
+                std::cout << name << " " << age << " " << score << std::endl;
+
+                return 0;
+            }
+            </xmp>
+        ］
+    </article>
+    <script src="js/global.js"></script>
+</body>

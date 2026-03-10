@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chapter 17. 列表初始化与指定初始化</title>
+    <!--引入思源宋体/黑体-->
+    <link href="https://fonts.thu.fail/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+    <!-- 0. 全局样式表 -->
+    <link rel="stylesheet" href="css/global.css">
+    <!-- 1. 引入 Highlight.js 样式表（这里使用默认主题） -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <!-- 2. 引入 Highlight.js 核心库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- 3. 按需引入 C++ 语言插件（如果使用 ES6 模块，则可以直接使用核心库的内置支持，无需单独引入） -->
+    <!--
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+    -->
+</head>
+<body>
+    <article>
+    [页眉: 17. 初始化列表]
+    <h3>1. 列表初始化</h3>
+        1) C++ 对象常用的两种初始化方式：
+            ①直接初始化：［i:格式为`类型 对象(初始值)`；「i:例如`int a(1);`；需要注意的是，直接初始化并不意味着一定不发生拷贝，只是这样叫而已；」］
+            ②拷贝初始化：［i:格式为`类型 对象 = 初始值`；「i:例如`int a = 1;`；需要注意的是，拷贝初始化并不意味着一定发生拷贝，只是这样叫而已；」］
+        2) 列表初始化：
+            ①什么是列表初始化：［i:使用大括号括起来的一张表对基本数据类型或 STL 容器类型对象进行初始化，支持直接初始化和拷贝两种初始化形式，其中直接初始化时可以省略小括号；「i:例如」］［b:「b:
+                ```c++
+                int a{1};
+                int a = {1};
+                
+                std::vector&lt;int&gt; vec1{1, 2, 3};
+                std::vector&lt;int&gt; vec2 = {1, 2, 3};
+                std::list&lt;int&gt; li1{1, 2, 3};
+                std::list&lt;int&gt; li2 = {1, 2, 3};
+                std::map&lt;std::string, int&gt; mp{{"abc", 123}, {"def", 456}, {"ghi", 789}};
+                std::map&lt;std::string, int&gt; mp = {"abc", 123}, {"def", 456}, {"ghi", 789};
+                ```
+            」］
+            ②列表初始化的原理（列表的本质以及为何能初始化基本类型和 STL 容器）：［b:
+                &emsp;&emsp;a.使用大括号括起来的包含初始值的列表编译器会把它当做`std::initializer_list&lt;T&gt;`类型的字面值（`T`为表中元素类型）；<br>
+                &emsp;&emsp;b.`std::initializer_list&lt;T&gt;`之所以能用于初始化对应的基本数据类型，是因为它重载了转换为模板类型的类型转换运算符，因此可以直接做为基本数据类型变量的初始值；<br>
+                &emsp;&emsp;c.`std::initializer_list&lt;T&gt;`之所以能用于初始化对应的 STL 容器类型，是因为 STL 容器类型一般都有参数类型为`std::initializer_list&lt;T&gt;`的构造函数，这些构造函数内部会从`std::initializer_list&lt;T&gt;`中取出各个值并将它做为对应元素的初始值；<br>
+                &emsp;&emsp;d.因此列表初始化并不是一种新的初始化方式，它仍然囊括在直接初始化或拷贝初始化的范畴；］
+            ③列表初始化的优势：［i:能避免宽类型到窄类型的隐式转换中的数据截断（直接编译失败），从而有效避免因为数据截断导致的意外行为；「i:例如」］［b:「b:
+                ```c++
+                int n = 256;
+                char c1 = x; // 发生数据截断，c 的值为 0
+                char c2 = {x}; // 编译失败 
+                char c3{x}; // 编译失败
+                ```
+            」］
+        3) std::initializer_list 的使用：
+            ①定义 std::initializer_list 对象：［i:语法格式为`std::initializer_list&lt;元素类型&gt; 对象名 = {值1, 值2, ...};`或`std::initializer_list&lt;元素类型&gt; 对象名{值1, 值2, ...}`，其中大括号中的各个值必须是模板参数类型或能隐式转换为模板参数类型的值；］
+            ②获取 std::initializer_list 大小：［i:通过`size()`方法；］
+            ③遍历 std::initializer_list 容器：［i:与其他 STL 容器类似，可以通过迭代器或基于范围的 for 循环；「i:例如」］［b:「b:
+                ```c++
+                // 假设 li 是一个 std::initializer_list&lt;int&gt;类型的对象
+                // 使用迭代器（其中迭代器类型可以使用 auto 代替）
+                for (std::initializer_list&lt;int&gt;::iterator it = li.begin(); it != li.end(); it++) {
+                    std::cout &lt;&lt; *it &lt;&lt; std::endl;
+                }
+
+                // 使用基于范围的 for 循环
+                for (int n : it) {
+                    std::cout &lt;&lt; n &lt;&lt; std::endl;
+                }
+
+                // 注意不能使用索引遍历，因为 std::initializer_list 不支持“[]”运算符，无法通过索引来访问元素
+                ```
+            」］
+    <h3>2. 指定初始化</h3>
+        1) 聚合类型与聚合初始化：
+            ①什么是聚合类型：［i:聚合类型是指 C 语言中能直接使用用大括号包裹起来的若干初始值进行初始化的类型，即数组类型、联合体类型和满足以下条件的自定义类型（结构体/类）<br>
+                &emsp;&nbsp;a. 成员都是公有的；<br>
+                &emsp;&nbsp;b. 没有用户自定义的构造函数；<br>
+                &emsp;&nbsp;c. 没有基类（C++17 之前）；若存在基类则基类也必须是聚合类型（C++17之后）；<br>
+                &emsp;&nbsp;d. 没有虚基类和虚函数；］
+        2) 指定初始化(C++20)：
+            ①什么是指定初始化：［i:指定初始化是为了提高代码可读性，在聚合初始化时明确指定各个初始值是用来初始化哪个成员的；「i:例如」］［b:「b:
+                ```c++
+                struct C { int n; double d; };
+                C c1 = {1, 1.2}; // 聚合初始化的传统形式
+                C c = {.n = 1, .d = 1.2}; // 使用指定初始化的聚合初始化
+                ```
+                虽然 C 语言早就支持这种语法特性了，但是直到 C++20 标准 C++ 才支持这种语法特性，而且有很多限制条件；」］
+            ②指定初始化能否初始化静态成员：［i:不能；］
+            ③指定初始化是否要符合声明顺序：［i:必须与声明顺序完全一致且不能跳过某些元素的初始化；注意这与 C 语言可以打乱顺序且可以跳过某些元素的初始化完全不同！］
+            ④指定初始化是否可以跳过元素：［i:不能；］
+            ⑤联合体类型指定初始化注意点：［i:只能指定初始化某个成员；］
+            ⑥指定初始化能否嵌套使用：［i:可以；「i:例如」］［b:「b:
+                ```c++
+                #include &lt;iostream&gt;
+
+                struct Inner {
+                    int i_n;
+                    double i_d;
+                };
+
+                struct Outer {
+                    int o_n;
+                    double o_d;
+                    Inner o_i;
+                }
+
+                int main(int argc, char** argv) {
+                    Outer o{.o_n = 1, .o_d = 1.23, .o_i = { .i_n = 1, .i_d = 1.23 }};
+                    std::cout &lt;&lt; o.o_i.i_n &lt;&lt; " " &lt;&lt; o.o_i.i_d &lt;&lt; std::endl;
+
+                    return 0;
+                }
+                ```
+            」］
+            ⑦能否重复初始化某个元素：［i:不能；注意这与 C 语言完全不同，C 语言允许重复初始化同一元素；「i:例如」］［b:「b:
+                ```c++
+                #include &lt;stdio.h&gt;
+
+                struct C {
+                    int i_n;
+                    double i_d;
+                };
+
+                int main(int argc, char** argv) {
+                    struct C c = {.o_n = 1, .o_n = 2, .o_d = 1.23};
+                    printf("%d\n", c.o_n);
+
+                    return 0;
+                }
+                ```
+                以上代码使用 C++ 编译器将编译失败，但是使用 C 语言编译器能通过且运行结果为最后一次初始化的结果 2；
+            」］
+            ⑧数组能否使用指定初始化：［i:不能；］
+    </article>
+    <script src="js/global.js"></script>
+</body>
+</html>

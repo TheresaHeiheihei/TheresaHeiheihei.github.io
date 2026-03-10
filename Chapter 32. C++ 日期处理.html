@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C++ 日期处理</title>
+    <!-- 0. 全局样式表 -->
+    <link rel="stylesheet" href="css/global.css">
+    <!-- 1. 引入 Highlight.js 样式表（这里使用默认主题） -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <!-- 2. 引入 Highlight.js 核心库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- 3. 按需引入 C++ 语言插件（如果使用 ES6 模块，则可以直接使用核心库的内置支持，无需单独引入） -->
+    <!--
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+    -->
+</head>
+<body>
+    <article>
+    [页眉: 32. C++ 日期处理] 
+        <h3>1. 日历类型 (C++20)</h3>
+        1) 一元日历类型：
+            ①各种一元日历类型、各自的含义：［i:一元日历类型有 year、month、day、weekday、weekday_indexed、weekday_last；各自的含义如下］［b:
+                &emsp;&nbsp;a. year 类型对象代表日历中的某个年份（如 2020 年）；「i:形象地说就是代表任意年份的一本日历；」<br>
+                &emsp;&nbsp;b. month 类型对象代表日历中的某个月份（如 1 月）；「i:形象地说就是对于简式日历（一本为一年、一页为一个月、一行为一周、一列都是星期 d）其对象可以表示任意一页，或对于老式日历（一本为一年、一页为一天）其对象可表示任意月份对应的一沓（可能共有 28、29、30、31 页）；」<br>
+                &emsp;&nbsp;c. day 对象代表日历中的某号（如 1 号）；「i:形象地说就是对于简式日历其对象可代表用于表示某一天的任意数字，或者说对于老式日历其对象可表示任意一页；」<br>
+                &emsp;&nbsp;d. weekday 对象日历中的星期几（例如星期一/周一）；「i:形象地说就是对于简式日历其对象只能代表特定列的任意数字；」<br>
+                &emsp;&nbsp;e. weekday_indexed 对象代表每个月中第几个星期几（例如每个月第一个星期一）；「i:形象地说就是对于简式日历其对象只能代表特定行和特定列的任意数字；」<br>
+                &emsp;&nbsp;f. weekday_last 对象代表每个月中最后一个星期几（例如每个月最后一个星期五）；「i:形象地说就是对于简式日历其对象只能代表特定列的最后一个数字；」
+            ］
+
+
+            ②以上类型的用户定义字面量：［i:year 类型和 day 类型可以直接使用标准库提供的用户定义字面量，它们在命名空间`std::chrono_literals`中；］［b:
+                &emsp;&nbsp;a. year 类型：`整数y`；例如 2025y；<br>
+                &emsp;&nbsp;b. day 类型：`整数d`；例如 1d, 28d；
+            ］
+
+            ③以上类型的预定义对象：［i:month、weekday类型可以使用标准库提供的预定义对象，它们在命名空间`std::chrono`中］［b:
+                &emsp;&nbsp;a. month 类型：January、February、March、April、May、June、July、August、September、October、November、December；<br>
+                &emsp;&nbsp;b. weekday 类型：Monday、Tuesday、Wednesday、Thirsday、Friday、Saturday、Sunday；
+            ］
+
+            ④weekday_indexed/last 常用表示法：［i:<br>
+                &emsp;&nbsp;a. 可以用预定义的 weekday 对象、“[]”运算符和索引表示 weekday_indexed 对象，语法格式为`xxxday[index]`，含义为某月第 index 个 xxxday；<br>
+                &emsp;&nbsp;b. 可以用预定义的 weekday 对象、“[]” 运算符和 last 表示 weekday_last 对象，语法格式为`xxxday[last]`，含义为某月最后一个 xxxday；<br>
+                &emsp;&nbsp;c. 它们的原理是 weekday 重载了“[]”运算符，当使用有效索引时返回 weekday_indexed 对象、当使用 last 时 weekday_last 对象；<br>
+                &emsp;&nbsp;「i:例如`Monday[3]`表示某个月中第三个星期一、`Friday[last]`表示某个月中最后一个星期五；」
+            ］
+
+            ⑤以上类型对象常用初始化方法：［i:一元日历类型对象的常用初始化方法如下］［b:
+                &emsp;&nbsp;a. 对于 year、month、day、weekday 类型可以直接从整数初始化，调用的是只有一个整数参数的构造函数，对应的对象分别表示 y 年、m 月、d 日、星期 d（假设 y、m、d 为实参）；也可以直接从用户定义字面量初始化，调用的是移动构造函数，对应的对象分别表示字面量初始值代表的年份、月份、日期、星期几；「i:例如」「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    year    y1(2020);    // 2020 年
+                    year    y2(2020y);   // 2020 年
+
+                    month   m1(3);       // 三月
+                    month   m2(March);   // 三月
+
+                    day     d1(12);      // 12 号 
+                    day     d2(12d);     // 12 号
+
+                    weekday wd1(5);      // 星期五
+                    weekday wd1(Friday); // 星期五
+                    ```
+                」
+                &emsp;&nbsp;b. 对于 weekday_indexed 类型，可以调用两个参数的构造函数进行初始化，第一个参数为 weekday 类型、用于指定星期几，第二个参数为整数类型、用于指定索引；也可以从 weekday 对象配合“[]”运算符和索引进行初始化、此时调用的是移动构造函数；「i:例如」「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    // 某个月的第二个星期五
+                    // 使用两个参数的构造函数
+                    weekday_indexed wdi1(weekday(5), 2);
+                    weekday_indexed wdi2(Friday, 2); 
+
+                    // 使用 weekday 对象、“[]”运算符和索引
+                    weekday_indexed wdi3(weekday(5)[2]);
+                    weekday_indexed wdi4(Friday[2]);
+                    ```
+                」
+                &emsp;&nbsp;c. 对于 weekday_last 类型，可以调用只有一个 weekday 类型参数的构造函数进行初始化；也可以从 weekday 对象配合“/”运算符和 last 进行初始化、此时调用的是移动构造函数；「i:例如」「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    // 某个月的最后一个星期五
+                    // 使用只有一个 weekday 类型的参数的构造函数
+                    weekday_last wdl1(weekday(5));
+                    weekday_last wdl2(Friday); 
+
+                    // 使用 weekday 对象、“[]”运算符和 last
+                    weekday_last wdl3(weekday(5)[last]);
+                    weekday_last wdl4(Friday[last]);
+                    ```
+                」
+            ］
+
+            ⑥各类型能表示的所有有效日期对象：［i:各种一元日历类型能表示的有效日期对象<br>
+                &emsp;&nbsp;a. year：-32768 ~ 32767；<br>
+                &emsp;&nbsp;b. month：1 月 ~ 12 月；<br>
+                &emsp;&nbsp;c. day：1 号 ~ 31 号；<br>
+                &emsp;&nbsp;d. weekday：周一 ~ 周日；<br>
+                &emsp;&nbsp;e. weekday_indexed：weekday 为周一到周日，索引为 1 到 5；<br>
+                &emsp;&nbsp;f. weekday_last：最后一个周一、最后一个周二、...、最后一个周日；
+            ］
+
+            ⑦形如“day d = 2”是否合法：［i:不合法，虽然 year、month、day、weekday 都存在只有一个整数参数的（转换）构造函数，但是它们都有 explicit 修饰，使得使用整数进行初始化时必须使用函数调用表达式（形如`day d(2)`或`day d{2}`的形式）显式调用构造函数；］
+
+            ⑧判断一个年份是否为闰年：［i:通过表示该年份的 year 对象的 is_leap() 方法；］
+
+            ⑨获取 weekday_last 的 weekday 对象：［i:通过`weekday()`方法；］
+
+            ⑩获取组成 weekday_indexed 对象的 weekday 对象和索引 index：［b:
+                ```c++
+                weekday() 方法：获取组成 weekday_indexed 对象的 weekday 对象；
+                index() 方法：获取 weekday_indexed 对象包含的索引；
+                ```
+                其他类型没有这两个方法；
+            ］ 
+
+            ⑪获取 year 类型能表示的最大和最小年份对应的 year 对象、其他类型有这些方法么：［b:
+                ```c++
+                year:
+                    max() 方法：year 类型能表示的最大的年份对应的 year 对象；
+                    min() 方法：year 类型能表示的最小的年份对应的 year 对象；
+                ```
+                其他类型没有这两个方法；
+            ］
+
+        
+        2) 二元日历类型：
+            ①各种二元日历类型、各自的含义：［i:常见的二元日历类型为 year_month、month_day、month_weekday、month_day_last、month_weekday_last；各自的含义如下］［b:
+                &emsp;&nbsp;a. year_month：其对象代表日历中的某年某月（如 2020 年 1 月）；「i:形象地说就是对于简式日历（一本为一年、一页为一月、一行为一周、一列都是星期 d）其对象只能代表特定年份的日历中的任意一页纸，或对于老式日历（一本为一年、一页为一天）其对象只能表示特定年份的日历中的任意月份对应的一沓纸；」<br>
+                &emsp;&nbsp;b. month_day：其对象代表日历中的某月某日（如 1 月 1 日）；「i:形象地说就是对于简式日历其对象只能表示特定页中的每个号码，或对于老式日历其对象只能表示特定月份对应的一沓中的任意一页；」<br>
+                &emsp;&nbsp;c. month_weekday：其对象代表日历中的某月的第几个星期几（如 1 月的第 1 个星期一）；「i:形象地说就是对于简式日历其对象只能代表特定页的特定列的任意号码，或者说对于老式日历其对象只能代表特定月份对应的一沓中的第 w、w+7、w+14、w+21、w+28（如果存在的话）这几页中的任意；」<br>
+                &emsp;&nbsp;d. month_day_last：其对象代表某月的最后一天（如 1 月 31 日）；「i:形象地说就是对于简式日历其对象只能代表特定页的最后一个号码，或者说对于老式日历其对象只能代表特定月份对应的一沓中的最后一页；」<br>
+                &emsp;&nbsp;e. month_weekday_last：其对象代表某月的最后一个星期几（如 1 月最后一个星期一）；「i:形象地说就是对于简式日历其对象只能代表特定页的特定列的最后一个数字，或者说对于老式日历其对象只能代表特定月份对应的一沓中第 w+28 这一页（不存在则代表 w+21 这一页）；」
+            ］
+
+            ②以上类型对象的初始化方法：［i:以上各种二元日历类型对象的常用初始化如下］［b:
+                &emsp;&nbsp;a. year_month：通过 year 和 month 一元日历对象进行初始化，即调用参数分别为 year 和 month 类型的构造函数；也可以使用“/”运算符将 year 和 month 对象连接为一个 year_month 对象、用它来初始化，此时调用的是移动构造函数；「i:例如」「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    // 使用两个参数的构造函数
+                    year_month ym1(year(2020), month(1));
+                    year_month ym2(2020y, January);
+                    ...
+
+                    // 使用移动构造函数
+                    year_month ym3(year(2020) / month(1));
+                    year_month ym4(2020y / January);
+                    year_month ym5(2020y / 1);
+                    ...
+                    ```
+                」
+                &emsp;&nbsp;b. month_day：通过 month 和 day 一元日历对象进行初始化，即调用参数分别为 month 和 day 类型的构造函数；也可以使用“/”运算符将 month 和 day 对象连接为一个 month_day 对象、用它来初始化，此时调用的是移动构造函数；「i:例如」「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    // 使用一个参数的构造函数
+                    month_day md1(month(1), day(1));
+                    month_day md2(January, 1d);
+                    ...
+
+                    // 使用移动构造函数
+                    month_day md3(month(1) / day(1));
+                    month_day md4(January / 1d);
+                    month_day md5(January / 1);
+                    ...
+                    ```
+                」
+                &emsp;&nbsp;e. month_weekday：通过 month 和 weekday_indexed 一元日历对象进行初始化，即调用参数分别为 month 和 weekday_indexed 类型的构造函数；也可以使用“/”运算符将 month 和 weekday_indexed 对象连接为一个 month_weekday 对象、用它来初始化，此时调用的是移动构造函数；「i:例如」「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    // 使用两个参数的构造函数
+                    month_weekday mwd1(month(1), weekday_indexed(weekday(1), 1));
+                    month_weekday mwd2(January, Monday[1]);
+                    ...
+
+                    // 使用移动构造函数
+                    month_weekday mwd3(month(1) / weekday_indexed(weekday(1), 1));
+                    month_weekday mwd4(January / Monday[1]);
+                    ...
+                    ```
+                」
+                &emsp;&nbsp;d. month_day_last：通过 month 一元日历对象进行初始化，即调用只有一个 month 类型参数的构造函数；也可以使用“/”运算符将 month 和 last 对象连接为一个 month_day_last 对象、用它来初始化，此时调用的是移动构造函数；「i:例如」「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    // 使用两个参数的构造函数
+                    month_day_last mdl1(month(1));
+                    month_day_last mdl2(January); 
+                    ...
+
+                    // 使用移动构造函数
+                    month_day_last mdl3(month(1) / last);
+                    month_day_last mdl4(January / last); 
+                    ...
+                    ```
+                」
+                &emsp;&nbsp;e. month_weekday_last：通过 month、weekday_last 一元日历对象进行初始化，即调用参数分别为 month 和 weekday_last 类型的构造函数；也可以使用“/”运算符将 month 和 weekday_last 对象连接为一个 month_weekday_last 对象、用它来初始化，此时调用的是移动构造函数；「i:例如」「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    // 使用两个参数的构造函数
+                    month_weekday_last mwdl1(month(1), weekday_last(weekday(1))); /* 不用预定义字面量或对象的纯右值实参例子 */
+                    month_weekday_last mwdl2(January, Monday[1]); /* 都使用预定义字面量或对象的例子 */
+                    ...
+
+                    // 使用移动构造函数
+                    month_weekday_last mwdl3(month(1) / weekday_last(weekday(1))); /* 不用预定义字面量或对象的纯右值实参例子 */
+                    month_weekday_last mwdl4(January / Monday[last]); /* 都使用预定义字面量或对象的例子 */
+                    ...
+                    ```
+                」
+            ］
+
+            ③以上日历对象表示的有效日期范围：［i:以上日历对象表示的有效日期范围如下］［b:
+                &emsp;&nbsp;a. year_month：year 的有效范围为(-2^15) ~ (2^15-1) 年；month 的有效范围为 1 月到 12 月；<br>
+                &emsp;&nbsp;b. month_day：
+                ```c++
+                January/1   ~ January/31
+                February/1  ~ February/29
+                March/1     ~ March/31
+                April/1     ~ April/30
+                May/1       ~ May/31
+                June/1      ~ June/30
+                July/1      ~ July/31
+                August/1    ~ August/31
+                September/1 ~ September/30
+                October/1   ~ October/31
+                December/1  ~ December/30
+                November/1  ~ November/31
+                ```
+                注意这里讨论的是单独使用（没有和年份联合使用）二元日历类型时其表示的有效日期范围，所以 02/29 是有效的，因为二月完全可以有 29 天；<br>
+                &emsp;&nbsp;c. month_weekday：month 的有效范围为 1 月到 12 月，weekday_indexed 的有效范围为 
+                ```c++
+                Monday[1]    ~ Monday[5]
+                Tuesday[1]   ~ Tuesday[5]
+                Wednesday[1] ~ Wednesday[5]
+                Thursday[1]  ~ Thursday[5]
+                Friday[1]    ~ Friday[5]
+                Saturday[1]  ~ Saturday[5]
+                Sunday[1]    ~ Sunday[5] 
+                ```
+                注意这里讨论的是单独使用（没有和月份联合使用）二元日历类型时其表示的有效日期范围，所以虽然第 5 个星期几在某年的某月份中不存在，但是在其他年份的该月中可能存在，因此是有效的；<br>
+                &emsp;&nbsp;d. month_day_last：一月最后一天、二月最后一天、……、十二月最后一天；即
+                ```c++
+                January/last   // 一月最后一天
+                February/last  // 二月最后一天     
+                March/last     // 三月最后一天  
+                April/last     // 四月最后一天  
+                May/last       // 五月最后一天
+                June/last      // 六月最后一天 
+                July/last      // 七月最后一天 
+                August/last    // 八月最后一天   
+                September/last // 九月最后一天      
+                October/last   // 十月最后一天    
+                December/last  // 十一月最后一天     
+                November/last  // 十二月最后一天     
+                ```
+                &emsp;&nbsp;e. month_weekday_last：month 的有效范围为 1 月到 12 月；weekday_last 的有效范围为最后一个周一到最后一个周日，即；
+                ```c++
+                January/Monday[last]   ~ January/Sunday[last] 
+                February/Monday[last]  ~ February/Sunday[last]
+                March/Monday[last]     ~ March/Sunday[last]
+                April/Monday[last]     ~ April/Sunday[last]
+                May/Monday[last]       ~ May/Sunday[last]
+                June/Monday[last]      ~ June/Sunday[last]
+                July/Monday[last]      ~ July/Sunday[last]
+                August/Monday[last]    ~ August/Sunday[last]
+                September/Monday[last] ~ September/Sunday[last]
+                October/Monday[last]   ~ October/Sunday[last]
+                November/Monday[last]  ~ November/Sunday[last]
+                December/Monday[last]  ~ December/Sunday[last]
+                ```
+            ］
+
+            ④获取组成它们的一元日历对象：［b:
+                ```c++
+                year_month： 
+                    year() 方法：获取 year 对象；
+                    month() 方法：获取 month 对象；
+                month_day： 
+                    month() 方法：获取 month 对象；
+                    day() 方法：获取 day 对象；
+                month_weekday： 
+                    month() 方法：获取 month 对象；
+                    weekday_indexed() 方法：获取 weekday_indexed 对象；
+                month_day_last：
+                    month() 方法：获取 month 对象；
+                month_weekday_last：
+                    month() 方法：获取 month 对象；
+                    weekday_last() 方法：获取 weekday_last 对象；
+                ```
+            ］
+
+        
+        3) 三元日历类型：
+            ①三元日历类型有哪些、各自的含义：［i:三元日历类型有］［b:
+                ```c++
+                year_month_day：其对象代表某年某月某日（例如 2020 年 1 月 1 日）
+                year_month_day_last：其对象代表某年某月的最后一日（例如 2020 年 2 月 29 日）
+                year_month_weekday：其对象代表某年某月的第几个星期 d（例如 2020 年 1 月的第一个星期一） 
+                year_month_weekday_last：其对象代表某年某月的最后一个星期 d（例如 2020 年 1 月的最后一个星期一）
+                ```
+            ］
+
+            ②以上类型对象的初始化方法：［i:以上各种三元日历类型对象的常用初始化如下］［b:
+                &emsp;&nbsp;a. year_month_day：通过日期时间点类型 local_days 和 sys_days 类型进行初始化，即调用参数类型为 local_days 或 sys_days 的构造函数；也可以通过 year_month_day_last 对象进行初始化，即调用参数类型为 year_month_day_last 的有参构造和拿书；也可以通过 year、month、day 一元日历对象进行初始化，即调用参数分别为 year、month、day 类型的构造函数；也可以使用“/”运算符将若干一元和二元对象（如 year 和 month 和 day 对象、或 year_month 和 day 对象、或 year 和 month_day 对象）连接为一个 year_month_day 对象、用它来初始化，此时调用的是移动构造函数；「i:例如」「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    local_days lds(2020y/1/1);
+                    sys_days sds(2020y/1/1);
+                    year_month_day_last ymdl(2020y/1/last);
+
+                    // 使用日期时间点类型进行初始化
+                    year_month_day ymd1(lds);
+                    year_month_day ymd2(sds);
+                    
+                    // 使用 year_month_day_last 类型进行初始化 
+                    year_month_day ymd3(ymdl);
+
+                    // 使用三个参数的构造函数
+                    year_month_day ymd4(year(2020), month(1), day(1));
+                    year_month_day ymd5(2020y, January, 1d);
+                    ...
+
+                    // 使用移动构造函数
+                    year_month_day ym6(year(2020) / month(1) / day(1));
+                    year_month_day ym7(2020y / January / 1d);
+                    year_month_day ym8(2020y / 1 / 1);
+                    ...
+                    ```
+                」
+                &emsp;&nbsp;b. year_month_weekday：通过日期时间点类型 local_days 和 sys_days 类型进行初始化，即调用参数类型为 local_days 或 sys_days 的构造函数；通过 year、month、weekday_indexed 一元日历对象进行初始化，即调用参数分别为 year、month、weekday_indexed 类型的构造函数；也可以使用“/”运算符将若干一元和二元对象（如 year 和 month 和 weekday_indexed 对象、或 year_month 和 weekday_indexed 对象、或 year 和 month_weekday 对象）连接为一个 year_month_weekday 对象，用它来初始化，此时调用的是移动构造函数；「i:例如」「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    local_days lds(2020y/1/1);
+                    sys_days sds(2020y/1/1);
+
+                    // 使用日期时间点类型进行初始化
+                    year_month_weekday ymwd1(lds);
+                    year_month_weekday ymwd2(sds);
+
+                    // 使用三个参数的构造函数
+                    year_month_weekday ymwd3(year(2020), month(1), weekday_indexed(weekday(1), 1));
+                    year_month_weekday ymwd4(2020y, January, Monday[1]);
+                    ...
+
+                    // 使用移动构造函数
+                    year_month_weekday ymwd5(year(2020) / month(1) / weekday_indexed(weekday(1), 1));
+                    year_month_weekday ymwd6(2020y / January / Monday[1]);
+                    year_month_weekday ymwd7(2020y / 1 / Monday[1]);
+                    ...
+                    ```
+                」
+                &emsp;&nbsp;c. year_month_day_last：通过 year 和 month_day_last 二元日历对象进行初始化「i:（之所以不是像其他三元日历类型那样可以完全通过一元日历类型进行初始化，是因为 month_day_last 无法拆分为 month 和 day_last 类型，day_last 类型根本不存在）」，即调用参数分别为 year 和 month_day_last 类型的构造函数；也可以使用“/”运算符将若干一元或二元对象（如 year 和 month 和 last 对象、或 year 和 month_day_last 对象、或 year_month 和 last 对象）连接为一个 year_month_day_last 对象、用它来初始化，此时调用的是移动构造函数；「i:例如」「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    // 使用两个参数的构造函数
+                    year_month_day_last ymdl1(year(2020), month_day_last(month(1)));
+                    year_month_day_last ymdl2(2020y, January / last);
+                    ...
+
+                    // 使用移动构造函数
+                    year_month_day_last ymdl3(year(2020) / month(1) / last);
+                    year_month_day_last ymdl4(2020y / January / last);
+                    year_month_day_last ymdl5(2020y / 1 / last);
+                    ...
+                    ```
+                」
+                &emsp;&nbsp;d. year_month_weekday_last：通过 year、month、weekday_last 一元日历对象进行初始化，即调用参数类型分别为 year、month、weekday_last 的有参构造函数；也可以使用“/”运算符将若干一元或二元日历对象（如 year 和 month 和 weekday_last 对象、year_month 和 weekday_last 对象、year 和 month_weekday_last 对象）连接为一个 year_month_weekday_last 对象、用它来初始化，此时调用的是移动构造函数；「i:例如」「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    // 使用三个参数的构造函数
+                    year_month_weekday_last ymwdl1(year(2020), month(1), weekday_last(weekday(1)));
+                    year_month_weekday_last ymwdl2(2020y, January, Monday[last]); 
+                    ...
+
+                    // 使用移动构造函数
+                    year_month_weekday_last ymwdl3(year(2020) / month(1) / weekday_last(weekday(1)));
+                    year_month_weekday_last ymwdl4(2020y / January / Monday[last]); 
+                    ...
+                    ```
+                」
+            ］
+        
+        4) 日历对象的一些通用操作：
+            ①某个日历对象是否表示有效日期：［i:通过`ok()`方法，返回`true`表示有效，返回`false`表示无效；］
+            
+            ②使用“/”合成多元日历的基本规则：［i:第一，不可跨级；第二，单位（时间精度）应由粗到细，但以下两种情况除外：<br>
+                &emsp;&nbsp;a. 各种一元 day 类型可以在左边，但是右边只能是 month 类型；<br>
+                &emsp;&nbsp;b. 各种二元 month_day 类型可以在左边，但是右边只能是 year 类型；
+            ］
+
+            ③使用“/”合成多元日历的各种情况：［b:
+            ```c++
+            // 一元日历类型在左边时的各种情况------------------------
+            year 在左边时：
+                year / month              => year_month 
+                year / month_day          => year_month_day 
+                year / month_weekday      => year_month_weekday 
+                year / month_day_last     => year_month_day_last 
+                year / month_weekday_last => year_month_weekday_last 
+            
+            month 在左边时：
+                month / day             => month_day 
+                month / weekday_indexed => month_weekday 
+                month / weekday_last    => month_weekday_last 
+                month / last            => month_day_last
+
+            day 在左边时： 
+                day / month => month_day 
+
+            weekday_indexed 在左边时：
+                weekday_indexed / month => month_weekday 
+            
+            weekday_last 在左边时：
+                weekday_last / month => month_weekday_last 
+
+            last 左边时：
+                last / month => month_day_last 
+
+            // 二元日历类型在左边时的各种情况------------------------
+            year_month 在左边时：
+                year_month / day             => year_month_day 
+                year_month / weekday_indexed => year_month_weekday 
+                year_month / weekday_last    => year_month_weekday_last 
+                year_month / last            => year_month_day_last
+        
+            month_day 在左边时：
+                month_day / year => year_month_day 
+
+            month_weekday 在左边时：
+                month_weekday / year => year_month_weekday 
+
+            month_day_last 在左边时：
+                month_day_last / year => year_month_day_last  
+
+            month_weekday_last 在左边时：
+                month_weekday_last / year => year_month_weekday_last 
+            ```
+        ］
+
+        ④使用“/”合成多元日历时用户定义字面量/预定义对象的简写形式、简写条件：［i:当“/”右边是 year、month、day 一元日历类型时，可以用纯数字代替用户定义字面量或预定义对象；「i:例如`2020y/1`（1 代表一月）、`1d/3`（3 代表三月）、`January/1/2020`（1 代表一月，2020 代表 2020 年）；」］
+
+        ⑤以下各行初始化语句能否编译通过、若能编译通过是否代表有效日期：［qb:
+            ```c++
+            using namespace std::chrono;
+            using namespace std::chrono_literals;
+
+            year y(2025); 
+            month m(1); 
+            day d(12);
+            year_month_day date;
+            
+            date = y/m/d; 
+            date = y/d/m; 
+            date = d/y/m; 
+            date = d/m/y; 
+            date = m/d/y; 
+            date = m/y/d; 
+
+            date = 2025y/January/12d;  
+            date = 2025y/1/12d;        
+            date = 2025y/January/12 ;  
+            date = 2025y/1/12;         
+
+            date = 2025y/12d/January;  
+            date = 2025y/12d/1;        
+            date = 2025y/12/January;   
+            date = 2025y/12/1;         
+
+            date = January/2025y/12d;  
+            date = January/2025y/12;   
+            date = January/2025/12d;   
+            date = January/2025/12;    
+
+            date = January/12d/2025y;  
+            date = January/12/2025y;   
+            date = January/12d/2025;   
+            date = January/12/2025;    
+            
+            date = 12d/2025y/January;  
+            date = 12d/2025y/1;        
+            date = 12d/2025/January;   
+            date = 12d/2025/1;       
+
+            date = 12d/January/2025y;  
+            date = 12d/January/2025;   
+            date = 12d/1/2025y;        
+            date = 12d/1/2025;         
+            ```
+        ］［b:答案如下
+            ```c++
+            using namespace std::chrono;
+            using namespace std::chrono_literals;
+
+            year y(2025); 
+            month m(1); 
+            day d(12);
+            year_month_day date;
+            
+            date = y/m/d; // √
+            date = y/d/m; // ×，不允许 year/day 组合（跨级别）
+            date = d/y/m; // ×，不允许 day/year 组合（跨级别）
+            date = d/m/y; // √
+            date = m/d/y; // √ 
+            date = m/y/d; // ×，只有 day 或 month_day 在前时可以倒序
+
+            date = 2025y/January/12d;  // √
+            date = 2025y/1/12d;        // √
+            date = 2025y/January/12 ;  // √
+            date = 2025y/1/12;         // √
+
+            date = 2025y/12d/January;  // ×，不允许 year/day 组合（跨级别）
+            date = 2025y/12d/1;        // ×，不允许 year/day 组合（跨级别）
+            date = 2025y/12/January;   // ×，12 会被视为十二月的简写，因此 2025y/12 为 year_month 类型，后面不可以再跟 month 类型
+            date = 2025y/12/1;         // √
+
+            date = January/2025y/12d;  // ×，只有 day 或 month_day 在前时可以倒序
+            date = January/2025y/12;   // ×，只有 day 或 month_day 在前时可以倒序
+            date = January/2025/12d;   // ×，2025 会被视为天数的简写，因此 2025y/2025 为 month_day 类型，后面不可以再跟 day 类型
+            date = January/2025/12;    // √，但它不代表 2025/1/12，而是 12/1/2025 这个无效日期，因为 2025 会被视为天数的简写，即 January/2025 为 month_day 类型，后面的 12 会被视为年份的简写，因此它表示的日期为 12 年 1 月 2025 号，是一个无效日期
+
+            date = January/12d/2025y;  // √
+            date = January/12/2025y;   // √
+            date = January/12d/2025;   // √
+            date = January/12/2025;    // √
+            
+            date = 12d/2025y/January;  // ×，不允许 day/year 组合（跨级别）
+            date = 12d/2025y/1;        // ×，不允许 day/year 组合（跨级别）
+            date = 12d/2025/January;   // ×，month_day/month 组合无意义 
+            date = 12d/2025/1;         // √，但它不代表 2025/1/1，而是 1/2025/12 这个无效日期
+
+            date = 12d/January/2025y;  // √
+            date = 12d/January/2025;   // √
+            date = 12d/1/2025y;        // √
+            date = 12d/1/2025;         // √
+            ```
+        ］
+
+
+        <h3>2. 日期的时间间隔类型 (C++20)</h3>
+        1) 平均月与平均年：［b:
+            &emsp;&nbsp;a. 平均月：月的长短是不确定的，对于 1/3/5/7/8/10/12 月是 31 天，2/4/6/9/11 月是 30 天，2 月在闰年是 29 天，常年是 28 天，平均下来为 30.436875 天「i:（记忆方式为将 30.345678 的小数位两两换位得到 30.436587，然后把 5 丢到最后即 30.436875）」；<br>
+            &emsp;&nbsp;b. 平均年：年的长短是不确定的，非闰年是 365 天，闰年是 366 天，平均下来 365.2425 天「i:（注意能被 4 整除且不能被 400 整除的年份为闰年，如果只考虑能被 4 整除平均下来是 365.25 天，但是再把不能被 400 整除考虑进来时，平均年应该稍少一些，即 365.2425 天）」；
+        ］
+
+        2) 日期时间间隔类型/含义/本质：［i:三种与日期相关的时间间隔类型及其含义如下<br>
+            &emsp;&nbsp;a. days：表示天数、本质为时间间隔数值类型为整数、时间精度为一天（24h 或 1440min 等）的 duration 类型；<br>
+            &emsp;&nbsp;b. weeks：表示周数、本质为时间间隔数值类型为整数、时间精度为一周（或 7 天）的 duration 类型；<br>
+            &emsp;&nbsp;c. months：表示（平均）月数、本质为时间间隔数值类型为整数、时间精度为平均月（30.436875 天）的 duration 类型；<br>
+            &emsp;&nbsp;d. years：表示（平均）年数、本质为时间间隔数值类型为整数、时间精度为平均年（365.2425 天）的 duration 类型（之所以不说时间精度为年，是因为年的长短是不确定的，非闰年是 365 天，闰年是 366 天，这里用的是平均年 365.2425 天）；
+        ］
+
+
+        3) days 对象的定义和初始化：
+            ①直接创建代表 N 天的 days 对象：［i:直接调用有参构造］［b:
+                ```c++
+                days 对象名(N);
+                days 对象名{N};
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    days ds1(3); // 三天
+                    days ds2{3}; // 三天
+                    ```
+                」
+            ］
+
+            ②形如“days d = 1”是否合法：［i:不合法，因为从整数到 days 的转换构造函数带有 explicit 修饰，不允许隐式类型转换，只能显式调用构造函数；］
+
+            ③从更细时间精度的时间间隔对象创建：［i:根据 duration 时间间隔类型的类型转换规则，只能先做强制类型转换（duration_cast/ceil/floor/round，「i:因为当 Rep 从整数到浮点时才允许隐式转换，即使 Rep 都是整数，时间精度由粗到细才能隐式转换」），然后调用（移动）构造函数；即］［b:
+                ```c++
+                days 对象名(duration_cast/ceil/floor/round&lt;days&gt;(更细时间精度的时间间隔对象));
+                days 对象名{duration_cast/ceil/floor/round&lt;days&gt;(更细时间精度的时间间隔对象)};
+                days 对象名 = duration_cast/ceil/floor/round&lt;days&gt;(更细时间精度的时间间隔对象);
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    days ds1(duration_cast&lt;days&gt;(hours(42))); // 一天
+                    days ds2(floor&lt;days&gt;(hours(42))); // 一天
+                    days ds3(ceil&lt;days&gt;(hours(42))); // 两天
+                    days ds4(round&lt;days&gt;(hours(36))); // 两天
+
+                    std::cout &lt;&lt; std::boolalpha
+                        &lt;&lt; (ds1 == days(1)) &lt;&lt; " "
+                        &lt;&lt; (ds2 == days(1)) &lt;&lt; " "
+                        &lt;&lt; (ds3 == days(2)) &lt;&lt; " "
+                        &lt;&lt; (ds4 == days(2));
+                    ```
+                」
+            ］
+
+            ④从更粗时间精度的时间间隔对象创建：［i:根据 duration 时间间隔类型的类型转换规则，可知存在以下几种情况<br>
+                &emsp;&nbsp;a. 初始值的时间间隔数值类型为整型且时间精度能被当前类型的时间精度整除时（或者说时间精度为整数天时，如 weeks、时间精度为整数天的其他 duration 类型），可以直接利用隐式转换，然后使用（拷贝/移动）构造函数；<br>
+                &emsp;&nbsp;b. 初始值的时间间隔数值类型为整型且时间精度能不能被当前类型的时间精度整除时（如 months、years、时间精度为非整数天的其他 duration 类型），需要先强制转换为 days 类型（duration_cast/ceil/floor/round），再使用（移动）构造函数；<br>
+                &emsp;&emsp;c. 初始值的时间间隔数值类型为浮点型时（无论时间精度如何），都需要先强制转换为 days 类型（duration_cast/ceil/floor/round），再使用（移动）构造函数；］［b:
+                ```c++
+                days 对象名(Rep为整型且Period为整数天的时间间隔对象);
+                days 对象名{Rep为整型且Period为整数天的时间间隔对象};
+                days 对象名 = Rep为整型且Period为整数天的时间间隔对象;
+
+                days 对象名(duration_cast/ceil/floor/round&lt;days&gt;(Rep为整型且Period不是整数天或Rep为浮点型的时间间隔对象));
+                days 对象名{duration_cast/ceil/floor/round&lt;days&gt;(Rep为整型且Period不是整数天或Rep为浮点型的时间间隔对象)};
+                days 对象名 = duration_cast/ceil/floor/round&lt;days&gt;(Rep为整型且Period不是整数天或Rep为浮点型的时间间隔对象);
+
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    days ds1(weeks(1));
+                    days ds2(weeks(2));
+
+                    days ds3(duration_cast&lt;days>(months(1))); // 30 天
+                    days ds4(floor&lt;days>(months(1))); // 30 天 
+                    days ds5(ceil&lt;days>(months(1))); // 31 天
+                    days ds6(round&lt;days>(months(1))); // 30 天 
+
+                    days ds7(duration_cast&lt;days>(months(2))); // 60 天
+                    days ds8(floor&lt;days>(months(2))); // 60 天 
+                    days ds9(ceil&lt;days>(months(2))); // 61 天
+                    days ds10(round&lt;days>(months(2))); // 61 天
+
+                    days ds11(duration_cast&lt;days>(years(1))); // 365 天
+                    days ds12(floor&lt;days>(years(1))); // 365 天 
+                    days ds13(ceil&lt;days>(years(1))); // 366 天
+                    days ds14(round&lt;days>(years(1))); // 365 天
+
+                    days ds15(duration_cast&lt;days>(years(3))); // 365*3 天
+                    days ds16(floor&lt;days>(years(3))); // 365*3 天 
+                    days ds17(ceil&lt;days>(years(3))); // 365*3+1 天
+                    days ds18(round&lt;days>(years(3))); // 365*3+1 天
+                    
+                    std::cout &lt;&lt; std::boolalpha
+                        &lt;&lt; (ds1 == days(7)) &lt;&lt; " "
+                        &lt;&lt; (ds2 == days(14)) &lt;&lt; " "
+
+                        &lt;&lt; (ds3 == days(30)) &lt;&lt; " "
+                        &lt;&lt; (ds4 == days(30)) &lt;&lt; " "
+                        &lt;&lt; (ds5 == days(31)) &lt;&lt; " "
+                        &lt;&lt; (ds6 == days(30)) &lt;&lt; " "
+
+                        &lt;&lt; (ds7 == days(60)) &lt;&lt; " "
+                        &lt;&lt; (ds8 == days(60)) &lt;&lt; " "
+                        &lt;&lt; (ds9 == days(61)) &lt;&lt; " "
+                        &lt;&lt; (ds10 == days(61)) &lt;&lt; " "
+
+                        &lt;&lt; (ds11 == days(365)) &lt;&lt; " "
+                        &lt;&lt; (ds12 == days(365)) &lt;&lt; " "
+                        &lt;&lt; (ds13 == days(365)) &lt;&lt; " "
+                        &lt;&lt; (ds14 == days(365)) &lt;&lt; " "
+
+                        &lt;&lt; (ds15 == days(365 * 3)) &lt;&lt; " "
+                        &lt;&lt; (ds16 == days(365 * 3)) &lt;&lt; " "
+                        &lt;&lt; (ds17 == days(365 * 3 + 1)) &lt;&lt; " "
+                        &lt;&lt; (ds18 == days(365 * 3 + 1)) &lt;&lt; " "
+                        &lt;&lt; std::endl;
+                    ```
+                」
+            ］
+
+            ⑤能否从日历类型对象创建：［i:不能，「i:例如」］［b:「b:
+                ```c++
+                days d(1d);
+                ```
+                是非法的；」
+            ］
+
+            ⑥从其他 days 对象创建：［i:拷贝构造或移动构造；「i:例如」］［b:「b:
+                ```c++
+                // 拷贝构造
+                days 对象名(左值days对象);
+                days 对象名{左值days对象};
+                days 对象名 = 左值days对象;
+
+                // 移动构造
+                days 对象名(std::move(左值days对象));
+                days 对象名{std::move(左值days对象)};
+                days 对象名 = std::move(左值days对象);
+
+                days 对象名(右值days对象);
+                days 对象名{右值days对象};
+                days 对象名 = 右值days对象;
+                ```
+            」］
+
+        
+        4) weeks 对象的定义和初始化：
+            ①直接创建代表 N 周的 weeks 对象：［i:直接调用有参构造］［b:
+                ```c++
+                weeks 对象名(N);
+                weeks 对象名{N};
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    weeks ws1(3); // 三周
+                    weeks ws2{3}; // 三周
+                    ```
+                」
+            ］
+
+            ②形如“weeks w = 3”是否合法：［i:不合法，因为从整数到 weeks 的转换构造函数带有 explicit 修饰，不允许隐式类型转换，只能显式调用构造函数；］
+
+            ③从更细时间精度的时间间隔对象创建：［i:先强制类型转换（duration_cast/ceil/floor/round），然后调用移动构造函数；「i:因为这只可能从时间间隔数值类型为整型、时间精度更细的时间间隔对象创建，或时间间隔数值类型为浮点型、时间精度更细的时间间隔对象创建，根据时间间隔类型的隐式转换规则可知无论是哪一种都无法隐式转换；」］［b:
+                ```c++
+                weeks 对象名(duration_cast/ceil/floor/round&lt;weeks&gt;(更细时间精度的时间间隔对象));
+                weeks 对象名{duration_cast/ceil/floor/round&lt;weeks&gt;(更细时间精度的时间间隔对象)};
+                weeks 对象名 = duration_cast/ceil/floor/round&lt;weeks&gt;(更细时间精度的时间间隔对象);
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    weeks ws1(duration_cast&lt;weeks&gt;(hours(24 * 8))); // 一周 
+                    weeks ws2(floor&lt;weeks&gt;(hours(24 * 8))); // 一周
+                    weeks ws3(ceil&lt;weeks&gt;(hours(24 * 8))); // 两周
+                    weeks ws4(round&lt;weeks&gt;(hours(24 * 8))); // 一周
+
+                    std::cout &lt;&lt; std::boolalpha
+                        &lt;&lt; (ws1 == weeks(1)) &lt;&lt; " "
+                        &lt;&lt; (ws2 == weeks(1)) &lt;&lt; " "
+                        &lt;&lt; (ws3 == weeks(2)) &lt;&lt; " "
+                        &lt;&lt; (ws4 == weeks(1));
+                    ```
+                」
+            ］
+
+            ④从更粗时间精度的时间间隔对象创建：［i:根据 duration 时间间隔类型的类型转换规则，可知存在以下几种情况<br>
+                &emsp;&nbsp;a. 初始值的时间间隔数值类型为整型且时间精度能被当前类型的时间精度整除时（或者说时间精度为整数周时），可以直接利用隐式转换，然后使用（拷贝/移动）构造函数；<br>
+                &emsp;&nbsp;b. 初始值的时间间隔数值类型为整型且时间精度能不能被当前类型的时间精度整除时（如 months、years、时间精度为非整数周的其他 duration 类型），需要先强制转换为 weeks 类型（duration_cast/ceil/floor/round），再使用（移动）构造函数；<br>
+                &emsp;&emsp;c. 初始值的时间间隔数值类型为浮点型时（无论时间精度如何），都需要先强制转换为 weeks 类型（duration_cast/ceil/floor/round），再使用（移动）构造函数；即］［b:
+                ```c++
+                weeks 对象名(Rep为整型且Period为整数周的时间间隔对象);
+                weeks 对象名{Rep为整型且Period为整数周的时间间隔对象};
+                weeks 对象名 = Rep为整型且Period为整数周的时间间隔对象;
+
+                weeks 对象名(duration_cast/ceil/floor/round&lt;weeks&gt;(Rep为整型且Period不是整数周或Rep为浮点型的时间间隔对象));
+                weeks 对象名{duration_cast/ceil/floor/round&lt;weeks&gt;(Rep为整型且Period不是整数周或Rep为浮点型的时间间隔对象)};
+                weeks 对象名 = duration_cast/ceil/floor/round&lt;weeks&gt;(Rep为整型且Period不是整数周或Rep为浮点型的时间间隔对象);
+
+                ```
+                「b:例如
+                    ```c++
+                    using namespace chrono;
+
+                    weeks ws1(duration_cast&lt;weeks>(months(1)));
+                    weeks ws2(floor&lt;weeks>(months(1)));
+                    weeks ws3(ceil&lt;weeks>(months(1)));
+                    weeks ws4(round&lt;weeks>(months(1)));
+
+                    weeks ws5(duration_cast&lt;weeks>(years(1)));
+                    weeks ws6(floor&lt;weeks>(years(1)));
+                    weeks ws7(ceil&lt;weeks>(years(1)));
+                    weeks ws8(round&lt;weeks>(years(1)));
+
+                    weeks ws9(duration_cast&lt;weeks>(months(2)));
+                    weeks ws10(floor&lt;weeks>(months(2)));
+                    weeks ws11(ceil&lt;weeks>(months(2)));
+                    weeks ws12(round&lt;weeks>(months(2)));
+
+                    std::cout &lt;&lt; std::boolalpha
+                        &lt;&lt; (ws1 == weeks(4)) &lt;&lt; " "
+                        &lt;&lt; (ws2 == weeks(4)) &lt;&lt; " "
+                        &lt;&lt; (ws3 == weeks(5)) &lt;&lt; " "
+                        &lt;&lt; (ws4 == weeks(4)) &lt;&lt; " "
+
+                        &lt;&lt; (ws5 == weeks(52)) &lt;&lt; " "
+                        &lt;&lt; (ws6 == weeks(52)) &lt;&lt; " "
+                        &lt;&lt; (ws7 == weeks(53)) &lt;&lt; " "
+                        &lt;&lt; (ws8 == weeks(52)) &lt;&lt; " "
+
+                        &lt;&lt; (ws9 == weeks(8)) &lt;&lt; " "
+                        &lt;&lt; (ws10 == weeks(8)) &lt;&lt; " "
+                        &lt;&lt; (ws11 == weeks(9)) &lt;&lt; " "
+                        &lt;&lt; (ws12 == weeks(9)) &lt;&lt; " "
+                        &lt;&lt; std::endl;
+                    ```
+                」
+            ］
+
+            ⑤能否从日历类型对象创建：［i:不能，「i:例如」］［b:「b:
+                ```c++
+                weeks ws(7d);
+                ```
+                是非法的；」
+            ］
+
+            ⑥从其他 weeks 对象创建：［i:拷贝构造或移动构造；「i:例如」］［b:「b:
+                ```c++
+                // 拷贝构造
+                weeks 对象名(左值weeks对象);
+                weeks 对象名{左值weeks对象};
+                weeks 对象名 = 左值weeks对象;
+
+                // 移动构造
+                weeks 对象名(std::move(左值weeks对象));
+                weeks 对象名{std::move(左值weeks对象)};
+                weeks 对象名 = std::move(左值weeks对象);
+
+                weeks 对象名(右值weeks对象);
+                weeks 对象名{右值weeks对象};
+                weeks 对象名 = 右值weeks对象;
+                ```
+            」］
+
+
+        5) months 对象的定义和初始化：
+            ①直接创建代表 N 月的 months 对象：［i:直接调用有参构造］［b:
+                ```c++
+                months 对象名(N);
+                months 对象名{N};
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    months ms1(3); // 三月
+                    months ms2{3}; // 三月
+                    ```
+                」
+            ］
+
+            ②形如“months m = 3”是否合法：［i:不合法，因为从整数到 months 的转换构造函数带有 explicit 修饰，不允许隐式类型转换，只能显式调用构造函数；］
+
+            ③从更细时间精度的时间间隔对象创建：［i:先强制类型转换（duration_cast/ceil/floor/round），然后调用移动构造函数；「i:因为这只可能从时间间隔数值类型为整型、时间精度更细的时间间隔对象创建，或时间间隔数值类型为浮点型、时间精度更细的时间间隔对象创建，根据时间间隔类型的隐式转换规则可知无论是哪一种都无法隐式转换；」］［b:
+                ```c++
+                months 对象名(duration_cast/ceil/floor/round&lt;months&gt;(更细时间精度的时间间隔对象));
+                months 对象名{duration_cast/ceil/floor/round&lt;months&gt;(更细时间精度的时间间隔对象)};
+                months 对象名 = duration_cast/ceil/floor/round&lt;months&gt;(更细时间精度的时间间隔对象);
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    months ms1(duration_cast&lt;months&gt;(hours(24 * 30))); // 零月 
+                    months ms2(floor&lt;months&gt;(hours(24 * 30))); // 零月
+                    months ms3(ceil&lt;months&gt;(hours(24 * 30))); // 一月
+                    months ms4(round&lt;months&gt;(hours(24 * 30))); // 一月
+
+                    months ms5(duration_cast&lt;months&gt;(hours(24 * 31))); // 一月
+                    months ms6(floor&lt;months&gt;(hours(24 * 31))); // 一月
+                    months ms7(ceil&lt;months&gt;(hours(24 * 31))); // 两月
+                    months ms8(round&lt;months&gt;(hours(24 * 31))); // 一月
+
+                    std::cout &lt;&lt; std::boolalpha
+                        &lt;&lt; (ms1 == months(0)) &lt;&lt; " "
+                        &lt;&lt; (ms2 == months(0)) &lt;&lt; " "
+                        &lt;&lt; (ms3 == months(1)) &lt;&lt; " "
+                        &lt;&lt; (ms4 == months(1)) &lt;&lt; " "
+
+                        &lt;&lt; (ms5 == months(1)) &lt;&lt; " "
+                        &lt;&lt; (ms6 == months(1)) &lt;&lt; " "
+                        &lt;&lt; (ms7 == months(2)) &lt;&lt; " "
+                        &lt;&lt; (ms8 == months(1)) &lt;&lt; " "
+
+                        &lt;&lt; std::endl;
+                    ```
+                」
+            ］
+
+            ④从更粗时间精度的时间间隔对象创建：［i:根据 duration 时间间隔类型的类型转换规则，可知存在以下几种情况<br>
+                &emsp;&nbsp;a. 初始值的时间间隔数值类型为整型且时间精度能被当前类型的时间精度整除时（或者说时间精度为整数平均月时，如 years），可以直接利用隐式转换，然后使用（拷贝/移动）构造函数；<br>
+                &emsp;&nbsp;b. 初始值的时间间隔数值类型为整型且时间精度能不能被当前类型的时间精度整除时（如时间精度为非整数月的其他 duration 类型），需要先强制转换为 months 类型（duration_cast/ceil/floor/round），再使用（移动）构造函数；<br>
+                &emsp;&emsp;c. 初始值的时间间隔数值类型为浮点型时（无论时间精度如何），都需要先强制转换为 months 类型（duration_cast/ceil/floor/round），再使用（移动）构造函数；即］［b:
+                ```c++
+                months 对象名(Rep为整型且Period为整数平均月的时间间隔对象);
+                months 对象名{Rep为整型且Period为整数平均月的时间间隔对象};
+                months 对象名 = Rep为整型且Period为整数平均月的时间间隔对象;
+
+                months 对象名(duration_cast/ceil/floor/round&lt;weeks&gt;(Rep为整型且Period不是整数平均月或Rep为浮点型的时间间隔对象));
+                months 对象名{duration_cast/ceil/floor/round&lt;weeks&gt;(Rep为整型且Period不是整数平均月或Rep为浮点型的时间间隔对象)};
+                months 对象名 = duration_cast/ceil/floor/round&lt;weeks&gt;(Rep为整型且Period不是整数平均月或Rep为浮点型的时间间隔对象);
+
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    // 注意 365.2425 / 30.436875 正好等于 12
+                    months ms1(duration_cast&lt;months>(years(1)));
+                    months ms2(floor&lt;months>(years(1)));
+                    months ms3(ceil&lt;months>(years(1)));
+                    months ms4(round&lt;months>(years(1)));
+
+                    std::cout &lt;&lt; std::boolalpha
+                        &lt;&lt; (ms1 == months(12)) &lt;&lt; " "
+                        &lt;&lt; (ms2 == months(12)) &lt;&lt; " "
+                        &lt;&lt; (ms3 == months(12)) &lt;&lt; " "
+                        &lt;&lt; (ms4 == months(12)) &lt;&lt; " "
+                        &lt;&lt; std::endl;
+                    ```
+                」
+            ］
+
+            ⑤能否从日历类型对象创建：［i:不能，「i:例如」］［b:「b:
+                ```c++
+                months ms(30d);
+                ```
+                是非法的；」
+            ］
+
+            ⑥从其他 months 对象创建：［i:拷贝构造或移动构造；「i:例如」］［b:「b:
+                ```c++
+                // 拷贝构造
+                months 对象名(左值months对象);
+                months 对象名{左值months对象};
+                months 对象名 = 左值months对象;
+
+                // 移动构造
+                months 对象名(std::move(左值months对象));
+                months 对象名{std::move(左值months对象)};
+                months 对象名 = std::move(左值months对象);
+
+                months 对象名(右值months对象);
+                months 对象名{右值months对象};
+                months 对象名 = 右值months对象;
+                ```
+            」］
+
+        
+        6) years 对象的定义和初始化：
+            ①直接创建代表 N 年的 years 对象：［i:直接调用有参构造］［b:
+                ```c++
+                years 对象名(N);
+                years 对象名{N};
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    years ys1(3); // 三年
+                    years ys2{3}; // 三年
+                    ```
+                」
+            ］
+
+            ②形如“years ys = 3”是否合法：［i:不合法，因为从整数到 years 的转换构造函数带有 explicit 修饰，不允许隐式类型转换，只能显式调用构造函数；］
+
+            ③从更细时间精度的时间间隔对象创建：［i:先强制类型转换（duration_cast/ceil/floor/round），然后调用移动构造函数；注意一个月按照平均月来算（30.436875 天），一年按照平局年来算（365.2425 天）；］［b:
+                ```c++
+                years 对象名(duration_cast/ceil/floor/round&lt;years&gt;(更细时间精度的时间间隔对象));
+                years 对象名{duration_cast/ceil/floor/round&lt;years&gt;(更细时间精度的时间间隔对象)};
+                years 对象名 = duration_cast/ceil/floor/round&lt;years&gt;(更细时间精度的时间间隔对象);
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    years ys1(duration_cast&lt;years&gt;(hours(24 * 365))); // 零年 
+                    years ys2(floor&lt;years&gt;(hours(24 * 365))); // 零年
+                    years ys3(ceil&lt;years&gt;(hours(24 * 365))); // 一年
+                    years ys4(round&lt;years&gt;(hours(24 * 365))); // 一年
+
+                    years ys5(duration_cast&lt;years&gt;(hours(24 * 366))); // 一年
+                    years ys6(floor&lt;years&gt;(hours(24 * 366))); // 一年
+                    years ys7(ceil&lt;years&gt;(hours(24 * 366))); // 两年
+                    years ys8(round&lt;years&gt;(hours(24 * 366))); // 一年
+
+                    std::cout &lt;&lt; std::boolalpha
+                        &lt;&lt; (ys1 == years(0)) &lt;&lt; " "
+                        &lt;&lt; (ys2 == years(0)) &lt;&lt; " "
+                        &lt;&lt; (ys3 == years(1)) &lt;&lt; " "
+                        &lt;&lt; (ys4 == years(1)) &lt;&lt; " "
+
+                        &lt;&lt; (ys5 == years(1)) &lt;&lt; " "
+                        &lt;&lt; (ys6 == years(1)) &lt;&lt; " "
+                        &lt;&lt; (ys7 == years(2)) &lt;&lt; " "
+                        &lt;&lt; (ys8 == years(1)) &lt;&lt; " "
+
+                        &lt;&lt; std::endl;
+                    ```
+                」
+            ］
+
+            ④能否从日历类型对象创建：［i:不能，「i:例如」］［b:「b:
+                ```c++
+                years ys(1y);
+                ```
+                是非法的；」
+            ］
+
+            ⑤从其他 years 对象创建：［i:拷贝构造或移动构造；「i:例如」］［b:「b:
+                ```c++
+                // 拷贝构造
+                years 对象名(左值years对象);
+                years 对象名{左值years对象};
+                years 对象名 = 左值years对象;
+
+                // 移动构造
+                years 对象名(std::move(左值years对象));
+                years 对象名{std::move(左值years对象)};
+                years 对象名 = std::move(左值years对象);
+
+                years 对象名(右值years对象);
+                years 对象名{右值years对象};
+                years 对象名 = 右值years对象;
+                ```
+            」］
+
+        <h3>3. 日期时间点类型 (C++20)</h3>
+        1) 相关类型：
+            ①local_t 类型含义：［i:local_t 类型是不含时区信息的时钟类型，它没有实际意义、仅用于标记一个 time_point 时间点类型为无时区信息的时间点类型；］
+
+            ②local_time/sys_time 类型含义/本质：［i:local_time 代表当地时间点，本质是时钟类型为 local_t 的 time_point 特化模板，即］［b:
+                ```c++
+                template &lt;class Duration&gt; 
+                class time_point&lt;local_t, Duration&gt;;
+                ```
+                sys_time 代表系统时间点，本质是时钟类型为 system_clock 的 time_point 特化模板，即以下类型的别名
+                ```c++
+                template &lt;class Duration&gt; 
+                class timepoint&lt;system_clock, Duration&gt;;
+                ```
+            ］
+
+            ③local_days/sys_days 类型含义/本质：［i:sys_days 代表系统日期，本质为时钟类型为 system_clock 的、时间精度为天（24h 或 1440min 等）的 time_point 具体类型，即］
+            ［b:
+                ```c++
+                time_point&lt;system_clock, days&gt;
+                sys_time&lt;days&gt;
+                ```
+                local_days 表示当地日期，本质为时钟类型为 local_t 的、时间精度为天（24h 或 1440min 等）的 time_point 类型；即
+                ```c++
+                time_point&lt;local_t, days&gt;
+                local_time&lt;days&gt;
+                // 注意 local_t、local_time 不含时区，所以必须结合时区信息之后才能表示一个完整日期 
+                ```
+            ］
+
+        2) 以上类型对象初始化的常用方法、原理：
+            ①local_days 和 sys_days：［i:从三元日历类型初始化；原理是三元日历类型重载了到 sys_days 类型的类型转换运算符且没有 explicit 限制、local_days 有参数为 sys_days 类型的构造函数；「i:例如」］［b:「b:
+                ```c++
+                sys_days sds1{year(2000)/month(3)/day(12)};
+                sys_days sds2{year(2000)/month_day_last(month(3))};
+                sys_days sds3{2000y/March/12d};
+                sys_days sds4{2000y/3/last};
+
+                local_days lds1{year(2000)/month(3)/day(12)};
+                local_days lds2{year(2000)/month_day_last(month(3))};
+                local_days lds3{2000y/March/12d};
+                local_days lds4{2000y/3/last};
+                ...
+                ```
+            」］
+
+            ②local_time 和 sys_time：［i:用从三元日历类型初始化的 local_days/sys_days 加上小时、分钟、秒数等时间间隔对象进行初始化；原理是从三元日历类型初始化的 local_days/sys_days 都是 time_point 时间点类型，而 time_point 时间点类型又重载了与 duration 时间间隔类型的加法运算符、相加的结果是 time_point 时间点类型；「i:例如」］［b:「b:
+                ```c++
+                local_time&lt;seconds> ltm1{local_days{year(2000)/month(3)/day(12)} + hours(1) + minutes(1) + seconds(1)};
+                local_time&lt;minuts> ltm2{sys_days{year(2000)/month_day_last(month(3))} + minutes(1)};
+                local_time&lt;milliseconds> ltm3{local_days{2000y/March/12d} + 1h + 1min + 1s + 1ms};
+                local_time&lt;days> ltm4{2000y/3/last};
+                ...
+                ```
+            」］
+
+            ③形如“2000y/1/1 + 1h”的实参合法么：［i:不合法；因为日历类型无法直接转换为 duration 时间间隔类型，duration 时间间隔类型也无法转换为日历类型；除非编译器先把日历类型转换为 sys_days 时间点类型然后再用重载的加法运算符与时间间隔对象 1h 相加，但这不符合隐式类型转换的规则——要么左操作数转右操作类型、要么右操作数只能转左操作数类型；］
+
+            ④作初始值的日历对象无效会怎样：［i:当三元日历对象无效（即 ok() 方法返回 false 时）时会进行归一化处理，即］［b:
+                &emsp;&nbsp;a. 若仅天数溢出，则重复执行以下过程直到不溢出：天数减去当月天数，月份进一；<br>
+                &emsp;&nbsp;b. 若仅月份溢出，则重复执行以下过程直到不溢出：月数减去 12，年份进一；<br>
+                &emsp;&nbsp;c. 若天数和月份同时溢出，则先对月数进行归一化，再对天数执行归一化；「i:例如」「b:
+                    ```c++
+                    月份溢出：2019-13-1 → 2020-1-1
+                    日期溢出：2019-4-31 → 2019-5-1
+                    闰年处理：2021-2-29 → 2021-3-1
+                    同时溢出：2019-14-30 → 2020-2-30 → 2020-3-1（注意不是 3-2）
+                    ```
+                」
+            ］
+        
+        3) 将 local_time 附加时区信息转 sys_time： 
+            ①获取当前地区的时区信息对象：［b:
+                ```c++
+                const time_zone* tz = current_zone();
+                // 注意 time_zone 和 current_zone() 都是 std::chrono 命名空间中的
+                // 获取的时区以操作系统使用的时区为准（例如在东八区但是将操作系统时区设置为 UTC，那么 current_zone() 获取的时区为 UTC）
+                ```
+            ］
+
+            ②获取指定地区的时区信息对象：［b:
+                ```c++
+                const time_zone* tz = locate_zone(时区名称);
+                /*
+                 * 时区名称的格式为 "大洲/城市"，例如
+                 * "America/New_York"（纽约，西五区）
+                 * "Asia/Shanghai"（上海，东八区）
+                 * "Asia/Tokyo"（东京，东九区）
+                 * "Europe/London"（伦敦，零时区）
+                 * ...
+                 */
+                ```
+            ］
+
+            ③local_time 转 sys_time：［i:通过 time_zone 类型的 to_sys() 方法；例如］［b:
+                ```c++
+                // 假设 tz 为时区信息对象指针
+                time_point&lt;system_clock, 时间精度&gt; tp = tz->to_sys(local_time对象);
+                sys_time&lt;时间精度&gt; tp = tz->to_sys(local_time对象);
+                ```
+            ］
+
+            ④该转换一定能成功么：［i:不一定；因为在世界上很多地区都有使用夏令时的传统，即夏天开始时将时间拨快一个小时，秋天结束时恢复，因此夏天开始时就会“少”一小时，秋天结束时会“多”一小时；因此如果附加时区信息转换出的时间刚好在这“消失”的或“重复”的一小时内，就会转换失败或出现歧义；］
+
+            ⑤对以上特殊情况的处理：［i:如果附加时区信息转换出的时间点刚好在“消失”的一小时内，则抛出 nonexistent_local_time 异常；若附加时区信息转换出的时间点出现在“重复”的一小时内，则抛出 ambiguous_local_time 异常，因此需要对 to_sys() 方法进行异常处理］［b:
+                ```c++
+                using namespace std::chrono;
+
+                const time_zone* tz = current_zone();
+                local_time ltp = { local_days{ 2025y / March / 25d } + 1h + 1s };
+                sys_time&lt;seconds&gt; stp;
+
+                try {
+                    stp = tz->sys(ltp);
+                }
+                catch (const noexistent_local_time& e) {
+                    std::cerr &lt;&lt; "该时间点因使用夏令时而不存在" &lt;&lt; std::endl;
+                }
+                catch (const ambiguous_local_time& e) {
+                    stp = tz->sys(ltp, choose::earliest); // 选择更早的那个时间点
+                    // stp = tz->sys(ltp, choose::latest); // 选择更晚的那个时间点
+                }
+                ```
+            ］
+
+        
+        4) 能逆向隐式转换为日历类型的类型：［i:`time_point &lt;system_clock, days>`类型（以及它的别名如`sys_time&lt;days>`、`sys_days`）能逆向隐式转换为日历类型；「i:例如」］［b:「b:
+            ```c++
+            year_month_day ymd1 = time_point&lt;system_clock, days>{ 2019y / 14 / 30 };
+            year_month_day ymd2 = sys_time&lt;days>{ 2019y / 14 / 30 };
+            year_month_day ymd3 = sys_days{ 2019y / 14 / 30 };
+            ```
+        」］
+
+
+        5) 格式化日期时间字符串：
+            ①兼容旧标准的步骤：［i:to_time_t() => localtime()/localtime_s() => strftime()；具体来说，首先调用 system_clock 的静态成员函数 to_time_t() 将时间点对象转换为时间戳类型 std::time_t；然后调用 ::local_time() 函数得到包含本地日期时间信息的 tm 结构体；最后使用 std::put_time() 函数格式化日期时间字符串并返回；「i:例如」］［b:「b:
+                ```c++
+                #include &lt;iostream&gt;
+                #include &lt;chrono&gt;
+
+                int main(int argc, char** argv) 
+                {
+                    std::chrono::t
+                    ime_point&lt;std::chrono::system_clock&gt; tp{std::chrono::system_clock::now()};
+                    char time_str[128] = {0};
+                    std::tm time_struct = {0};
+
+                    std::time_t time_stamp = std::chrono::system_clock::to_time_t(tp);
+                    localtime_s(&amp;time_struct, &amp;time_stamp);
+                    std::strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &amp;time_struct);
+                    
+                    std::cout &lt;&lt; time_str &lt;&lt; std::endl;
+
+                    return 0;
+                }
+                ```
+                不用对 localtime_s() 进行错误处理，因为它出错的条件为两个参数有一个为 NULL 或者第二个参数（时间戳）小于 0 或大于最大值，而通过有效的时间点对象通过 to_time_t() 方法得到的时间戳必然是有效的；
+            」］
+
+            ②C++20 的做法：［i:直接使用`std::format()`函数；「i:例如」］［b:「b:
+                ```c++
+                #include &lt;iostream&gt;
+                #include &lt;chrono&gt;
+
+                int main(int argc, char** argv) 
+                {
+                    std::chrono::system_clock::time_point tp{ std::chrono::system_clock::now() };
+                    std::string time_str = std::format("{:%Y-%m-%d %H:%M:%S}", tp);
+                    std::cout &lt;&lt; time_str &lt;&lt; std::endl;
+
+                    return 0;
+                }
+                ```
+                但是对于部分编译器，秒数后面可能带有小数部分，如“2020-01-20 07:20:09.9703780”；可以通过字符串分割等方法去除；例如
+                ```c++
+                #include &lt;iostream&gt;
+                #include &lt;chrono&gt;
+
+                int main(int argc, char** argv) 
+                {
+                    std::chrono::system_clock::time_point tp{ std::chrono::system_clock::now() };
+                    
+                    std::string time_str = std::format("{:%Y-%m-%d %H:%M:%S}", tp);
+                    if (time_str.find('.')) 
+                    {
+                        std::istringstream iss{ time_str }; // 字符串输入流
+                        std::string ret; // 用于保存结果
+                        std::getline(iss, ret, '.'); // 使用 getline() 模拟字符串分割效果
+                        std::cout &lt;&lt; ret &lt;&lt; std::endl;
+                    }
+
+                    return 0;
+                }
+                ```
+            」］
+    </article>
+    <script src="js/global.js"></script>
+</body>

@@ -1,0 +1,137 @@
+@font-face {
+  font-family: 'Noto Serif SC Regular';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url(https://cdn.jsdelivr.net/fontsource/fonts/noto-serif-sc@latest/chinese-simplified-400-normal.woff2) format('woff2'), 
+    url(https://cdn.jsdelivr.net/fontsource/fonts/noto-serif-sc@latest/chinese-simplified-400-normal.woff) format('woff'), 
+    url(https://cdn.jsdelivr.net/fontsource/fonts/noto-serif-sc@latest/chinese-simplified-400-normal.ttf) format('truetype');
+}
+
+/* noto-serif-sc-chinese-simplified-700-normal */
+@font-face {
+  font-family: 'Noto Serif SC Bold';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url(https://cdn.jsdelivr.net/fontsource/fonts/noto-serif-sc@latest/chinese-simplified-700-normal.woff2) format('woff2'),
+    url(https://cdn.jsdelivr.net/fontsource/fonts/noto-serif-sc@latest/chinese-simplified-700-normal.woff) format('woff'), 
+    url(https://cdn.jsdelivr.net/fontsource/fonts/noto-serif-sc@latest/chinese-simplified-700-normal.ttf) format('truetype');
+}
+
+@font-face {
+    font-family: 'Source Han Serif Regular';
+    font-style: normal;
+    font-display: swap;
+    font-weight: 400;
+    src: url(../fonts/SourceHanSerifCN-Regular-1.otf) format('opentype');
+}
+
+@font-face {
+    font-family: 'Source Han Serif Bold';
+    font-style: normal;
+    font-display: swap;
+    font-weight: 400;
+    src: url(../fonts/SourceHanSerifCN-Bold-2.otf) format('opentype');
+}
+
+:root {
+    --source-font: "Source Han Serif Regular", Serif;
+    --source-font-v1: "Noto Serif SC Regular", "Source Serif Pro","Source Han Serif SC Subset","Source Han Serif SC","Source Han Serif VF SC","Source Han Serif","Source Han Serif VF", serif;
+    
+    --source-font-bold: "Source Han Serif Bold", Serif;
+    --source-font-bold-v1: "Noto Serif SC Bold", Serif;
+    
+    --title-font: "微软雅黑", "Inter", "Source Sans Pro", "Source Han Sans SC", "Source Han Sans VF SC", sans-serif;
+}
+
+.toc {
+    line-height: 1.7em;
+}
+.a-toc {
+    border-bottom: solid 2px black;
+    color: inherit;
+    text-decoration: none;
+}
+
+body {
+    font-family: var(--source-font);
+}
+
+.check-answer {
+    border-bottom: solid 2px black;
+}
+.check-answer:hover {
+    cursor: pointer;
+}
+
+.hide {
+    display: none;
+}
+
+.answer {
+    margin: 0.3em 0 0.3em 0;
+    border: dashed gray 1.2px;
+    border-radius: 0.5em;
+    padding: 0.3em 0.5em 0.4em 0.5em;
+}
+
+h3 {
+    margin: 0.5em 0 0.5em 0;
+    border-bottom: dashed #bbb 1px;
+    padding: 0 0 0.2em 0;
+    font-family: var(--title-font);
+    font-size: 1.3em;
+}
+
+.example {
+    opacity: 0.4;
+}
+
+.my-pre-style {
+    margin: 0.3em 0 0.25em 0;
+    border-radius: 0.5em;
+    padding: 0.4em 0.5em 0.5em 0.5em;
+    background-color: #eee;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.92em;
+    line-height: 1.1em;
+    overflow: auto;
+}
+
+/* xmp {
+    margin: 0.3em 0 0.25em 0;
+    border-radius: 0.5em;
+    padding: 0.4em 0.5em 0.5em 0.5em;
+    background-color: #eee;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.85em;
+    line-height: 1.1em;
+    overflow: auto;
+} */
+
+.my-pre-style>.code-inner-pre {
+    display: block;
+    margin: 0;
+    padding: 0;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.92em;
+    line-height: 1.1em;
+    overflow: visible;
+}
+
+.inline-code {
+    position: relative;
+    top: -0.1em;
+    margin: 0em 0.2em 0em 0.2em;
+    border-radius: 0.3em;
+    padding: 0em 0.2em 0em 0.2em;
+    background-color: #eee;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.92em;
+    line-height: 1.3em;
+}
+
+.need-highlight {
+    display: block;
+}

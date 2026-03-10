@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>编译时计算</title>
+    <!-- 0. 全局样式表 -->
+    <link rel="stylesheet" href="css/global.css">
+    <!-- 1. 引入 Highlight.js 样式表（这里使用默认主题） -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <!-- 2. 引入 Highlight.js 核心库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- 3. 按需引入 C++ 语言插件（如果使用 ES6 模块，则可以直接使用核心库的内置支持，无需单独引入） -->
+    <!--
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+    -->
+</head>
+<body>
+    <article>
+    [页眉: 22. 编译时计算]
+        <h3>1. 常量与 constexpr 关键字</h3>
+        1) 常量、编译时常量、常量表达式：
+            ①什么是常量：［i:不能在运行时修改的量称为常量；「i:例如字面量`1, 1.23, "hello", true, ... `都是常量；被 const 修饰的量也是常量，例如`const int a = 1`中的 a 也是常量，`int n = 1; const int m = n` 中的 m 也是常量；它们的特点都是无法在运行时修改，即使你能获取某些常量的地址（如字符串字面量、被 const 修饰的量等）；」］［b:「b:
+                <xmp>
+                const char(*ps)[6] = &"hello";
+                ps[1] = 'a'; // 编译失败
+
+                const int n = 1;
+                const int* pn = &n;
+                *pn = 2; // 编译失败
+                </xmp>
+            」］
+
+            ②编译时常量和运行时常量：［i:编译时常量是指编译时就能确定值的常量，编译器可以直接将它的值嵌入到代码中、可能不分配内存、没有运行时开销；运行时常量是指只有到了运行时才能确定值的常量、一定会分配内存、一定存在运行时开销；「i:例如」］［b:「b:
+                <xmp>
+                // 编译时常量 
+                1, true, 'a', "hello", sizeof(std::string("abc"))
+                const int a = 1;
+
+                // 运行时常量（下面的 m）
+                int n = 1;
+                const int m = n;
+                </xmp>
+            」］
+
+            ③什么是常量表达式：［i:只含常量的表达式称为常量表达式；「i:例如`1+1`、`!false`、`1.23 >= 4.56`、`sizeof("hello")`、`n + 2（假设 const int n = 1）`都是常量表达式；单个常量本身如`1, true, -1.23`等也可称为称量表达式；」］
+
+            ④编译时常量表达式：［i:能在编译时求值的常量表达式为编译时常量表达式；注意包含运行时常量甚至变量的表达式也可能是编译时常量表达式，只要它能在编译时求值即可；「i:例如`1+1`、`!false`、`1.23 >= 4.56`、`n + 2（假设 const int n = 1）`都是编译时常量表达式，而」］［b:「b:
+                <xmp>
+                int n = 1;
+                const int m = n;
+                const int o = m + n;
+                </xmp>
+                中的`m + n`就不是编译时常量表达式，因为它含有运行时常量 m；注意
+                <xmp>
+                std::string str = "abc";
+                const std::size_t size = sizeof(str);
+                </xmp>
+                中`sizeof(str)`也是编译时常量表达式，虽然它含有变量 str，但是它能在编译期求值；
+            」］
+
+            ⑤const 修饰的量何时为编译时常量：［i:看它修饰的量的初始化表达式是不是编译时常量表达式，是则为编译时常量，否则为运行时常量；］
+
+            ⑥编译时常量和编译时常量表达式应用：［i:用于数组大小、模板参数、case 标签等；例如」］［b:「b:
+                <xmp>
+                int n = 2;
+                const int m = n;
+                const int cn = 2;
+
+                int arr1[3]      = {1, 2, 3}; // ok
+                int arr2[1 + 2]  = {1, 2, 3}; // ok
+                int arr3[sizeof(arr2)] = {1, 2, 3}; // ok
+                int arr4[cn]     = {1, 2}; // ok
+                int arr5[cn + 1] = {1, 2, 3}; // ok 
+                int arr6[n]      = {1, 2}; // error，n 是变量 
+                int arr7[m]      = {1, 2}; // error，m 是运行时常量
+                int arr8[m + 1]  = {1, 2, 3}; // error，m 是运行时常量、m + 1 不是编译时常量表达式
+                </xmp>
+            」］
+
+        2) constexpr 关键字的概念与基本使用：
+            ①constexpr 关键字的作用：［i:笼统的说 constexpr 用于命令编译器在编译时计算出修饰目标的值；具体来说，constexpr 可以修饰变量和函数（返回值）<br>
+            ＞a. 修饰变量时表示在编译时计算出目标的值，即相当于定义了一个编译时常量；<br>
+            ＞b. 修饰函数（返回值）时表示函数可以在编译时调用和计算返回值；注意是“可以”而不是“一定”，即函数仍然可以运行时调用（何时编译时调用何时运行时调用后文详解）；「i:例如」］［b:「b:
+                <xmp>
+                #include <cmath>
+                #include <iostream>
+
+                // constexpr 修饰函数、该函数可以在编译时调用和计算返回值
+                constexpr double get_distance(double x1, double y1, double x2, double y2) {
+                    return ::sqrt(::pow(x2 - x1, 2) + ::pow(y2 - y1, 2));
+                }
+                
+                int main(int argc, char** argv)
+                {   
+                    int x1 = 0, y1 = 0; 
+
+                    // constexpr 修饰变量，表示在编译时计算 n 的值、或者说定义了一个编译时常量 n 
+                    constexpr int n = 1 + 2 + 3; 
+                    
+                    // 此处 get_instance() 为运行时调用
+                    double instance1 = get_instance(x1, y1, 3, 4);
+
+                    // 此处 get_instance() 为编译时调用、但是其返回值赋值给变量 distance2 发生在运行时
+                    double instance2 = get_instance(0, 0, 3, 4);
+
+                    // 此处 get_distance() 为编译时调用、赋值给 distance3 也发生在编译时
+                    constexpr double instance3 = get_instance(0, 0, 3, 4);
+
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ②constexpr 修饰基本类型和数组的要求：［i:修饰基本类型时其初始化表达式必须能编译时求值（因为编译时常量表达式能在编译时求值，所以也可以说 constexpr 修饰基本类型时初始化表达式必须是值为该类型或能隐式转换为该类型的编译时常量表达式）；修饰数组时其初始化表达式必须是聚合初始化表达式，且其中的每个元素的值都能编译时计算（或者说都必须是编译时常量表达式）；「i:例如」］［b:「b:
+                <xmp>
+                constexpr int n1 = 1 + 2 + 3; // ok
+                
+                int a = 1;
+                constexpr int n2 = a + 2; // error, a 是变量、a + 2 无法编译时求值 
+
+                const int b = 2;
+                constexpr int n3 = b + 3; // ok
+
+                int c = 1;
+                const int d = c;
+                constexpr int n4 = d + 4; // error，d 的值取决于变量 c、d + 4 无法编译时求值  
+
+                int &lr = a;
+                constexpr int n5 = lr + 5; // error，n5 的值取决于变量 a、lr + 5 无法编译时求值，且取引用是运行时操作
+
+                const int &clr = b;
+                constexpr int n6 = clr + 6; // error，取引用是运行时操作<!--这里的 const 为底层 const 而非顶层 const，即 clr 没有常属性，所以 clr + 5 并不是常量表达式；事实上，顶层 const 出现在赋值运算符的右边时会被忽略，这也意味着 clr 绑定的并不是常量-->
+
+                constexpr int n7 = n1 + 7; // ok<!--，constexpr 修饰的量 n1 也是常量、n1 + 6 是常量表达式-->
+
+                int &&rr = 1;
+                constexpr int n8 = rr + 8; // error，取引用是运行时操作<!--虽然 1 是常量，但它的右值引用 rr 并不是常量，没有常属性 const，从语法层面来讲 rr 可以出现在等号左边（如 rr = 2），即可以在运行时修改，因此不是常量；从本质上讲，int& rr = 1 中的 1 和 rr 的引用目标并不是同一个实体，int& rr = 1 会先在内存中开辟一段内存空间然后把 1 存进去再用 rr 引用它-->
+
+                const int &&crr = 1;
+                constexpr int n9 = crr + 9; // error，取引用是运行时操作<!--虽然 1 是常量而且也加了 const 修饰，但是这个 const 是底层 const 而非顶层 const，即 crr 不能做为常量看待、crr + 8 也就不是常量表达式-->
+
+                constexpr int* pa = &a; // error，取地址是运行时操作<!--a 的地址必须在运行时才能确定-->
+
+                constexpr int* pb = &b; // error，取地址是运行时操作<!--虽然 b 是常量，但是它的地址也是只能在运行时才能确定-->
+
+                constexpr int* pnull = nullptr; // ok
+
+                std::string str1 = "123";
+                constexpr std::size_t size = sizeof(str1); // ok，虽然初始化表达式包含变量 str，但是获取其大小不涉及运行时操作
+                
+                constexpr int arr[3] = {1, 2, 3}; // ok
+                </xmp>
+            」］
+
+            ③以下初始化语句能否编译通过：［qb:问题：
+                <xmp>
+                constexpr int n1 = 1 + 2 + 3;
+                
+                int a = 1;
+                constexpr int n2 = a + 2; 
+
+                const int b = 2;
+                constexpr int n3 = b + 3; 
+
+                int c = 1;
+                const int d = c;
+                constexpr int n4 = d + 4;
+
+                int &lr = a;
+                constexpr int n5 = lr + 5; 
+
+                const int &clr = b;
+                constexpr int n6 = clr + 6; 
+
+                constexpr int n7 = n1 + 7; 
+
+                int &&rr = 1;
+                constexpr int n8 = rr + 8; 
+
+                const int &&crr = 1;
+                constexpr int n9 = crr + 9;
+
+                constexpr int* pa = &a;
+
+                constexpr int* pb = &b; 
+
+                constexpr int* pnull = nullptr;
+
+                std::string str1 = "123";
+                constexpr std::size_t size = sizeof(str1);
+
+                constexpr int arr[3] = {1, 2, 3};
+                </xmp>
+            ］［b:答案：参见上一问题的案例；］
+
+            ④constexpr 修饰一般函数需满足的条件：［i:对于 C++11，constexpr 修饰的函数的函数体中，除了可以包含 using 指令、typedef 语句以及 static_assert 断言外，只能：<br>
+                ＞a. 包含一条 return 语句，因此返回值类型不能是 void；<br>
+                ＞b. 返回的表达式不能是赋值表达式、且不能涉及运行时操作（如读写全局或静态变量、创建进程或线程、读写文件、网络通信等等），在语法上体现为不能调用不带 constexpr 修饰的函数；<br>
+                ＞C++14 放宽了 constexpr 修饰函数时对函数的要求，其修饰的函数只需要满足以下条件<br>
+                ＞a. 不能包含静态局部变量，非静态局部变量必须能在编译时求值（初始化为编译时常量表达式）；<br>
+                ＞b. 不能涉及运行时操作（如读写全局或静态变量、创建进程或线程、读写文件、网络通信等等），在语法上体现为不能调用不带 constexpr 修饰的函数（若仍然调用不带 constexpr 修饰的函数，则强制运行时调用，此时 constexpr 没有意义）；<br>
+                ＞c. 可以抛出异常，但如果触发异常默认会运行时计算，若强制编译时计算（如赋值给 constexpr 修饰的变量）就会编译失败；<br>
+                ＞d. 一般只有一个 return 语句（因此返回值类型不能是 void），若存在多条 return 语句则不能根据运行时条件决定返回何值；「i:例如」
+            ］［b:「b:
+                <xmp>
+                // 根据两点求直线斜率（C++11 版本）
+                constexpr double get_k1(double x1, double y1, double x2, double y2) {
+                    return x1 == x2 ? DBL_MAX : (y2 - y1) / (x2 - x1);
+                    // DBL_MAX 为表示最大的 double 数值的宏
+                }
+                
+                // 根据两点求直线斜率（C++14 版本，C++11 会编译失败）
+                constexpr double get_k2(double x1, double y1, double x2, double y2) {
+                    if (x1 == x2) {
+                        throw std::runtime_error("x1 cannot be equal to x2...");
+                    }
+                    return (y2 - y1) / (x2 - x1);
+                }
+                </xmp>
+            」］
+
+            ⑤constexpr 修饰的函数何时编译时调用：［i:第一，函数调用之前必须先编译其定义语句（因为编译器总体是按照代码顺序一行一行编译的）；第二，实参必须都是编译时常量（表达式）；「i:例如」］［b:「b:
+                <xmp>
+                #include <cmath>
+                #include <iostream>
+
+                // 根据两点求直线斜率
+                constexpr double get_k(double x1, double y1, double x2, double y2) {
+                    if (x1 == x2) {
+                        throw std::runtime_error("x1 cannot be equal to x2...");
+                    }
+                    return (y2 - y1) / (x2 - x1);
+                }
+        
+                // 以下语句以 C++14 为准
+                int main(int argc, char** argv)
+                {    
+                    int x1 = 0, y1 = 0, x2 = 3, y2 = 4;
+                    int x3 = 3, y3 = 5;
+
+                    double           k1 = get_k(0, 0, 3, 4); // 编译时计算 get_k()，但在运行时将结果赋值给 k1
+                    constexpr double k2 = get_k(0, 0, 3, 4); // 编译时计算 get_k() 和 k2 的值
+                    double           k3 = get_k(3, 0, 3, 4); // 运行时计算，因为会触发异常 
+                    constexpr double k4 = get_k(3, 0, 3, 4); // 编译失败
+                    double           k5 = get_k(x1, y1, x2, y2); // 运行时计算
+                    double           k6 = get_k(x3, y3, x2, y2); // 运行时计算，并抛出异常
+                    
+                    std::cout << k1 << " " << k2 << " " << k3 << " " << k4 << " " << k5 << " " << k6 << std::endl;
+
+                    return 0;
+                } 
+                </xmp>
+            」］
+
+
+        3) constexpr 与自定义类型：
+            ①constexpr 可修饰自定义类型对象么：［i:可以，但是存在以下两种情况<br>
+                ＞若修饰非聚合类型的对象，则必须存在且已经编译被 constexpr 修饰的构造函数（constexpr 修饰构造函数时构造函数需满足的条件详见后文），且实参必须都能编译时求值（或者说都必须是编译时常量表达式）；<br>
+                ＞若修饰聚合类型的对象，初始化表达式可以为聚合初始化表达式、且其中每个元素的值都必须能编译时计算；也可以是编译时常量对象，如 constexpr 修饰的对象或通过被 constexpr 修饰的构造函数在编译时调用得到的匿名对象；<br>「i:例如」］［b:「b:
+                <xmp>
+                class Demo1 {public: int a; double d;};
+                
+                class Demo2 {
+                private:
+                    int _a;
+                    double _d;
+                public:
+                    Demo2() :_a(1), _d(1.23) {}
+                };
+
+                class Demo3 {
+                private:
+                    int _a;
+                    double _d;
+                public:
+                    Demo2() :_a(1), _d(1.23) {}
+                    constexpr Demo2(int a, double d) :_a(a), _d(d) {}
+                };
+
+                int n = 1;
+
+                constexpr struct {int a; double d;} s = {1, 1.24}; // ok，聚合初始化
+                constexpr Demo1 d11 = {1, 1.24}; // ok，聚合初始化
+                constexpr Demo1 d12 = d11; // ok
+                constexpr std::string str2 = "123"; // error, std::string 不是聚合类型、也没有被 constexpr 修饰的构造函数
+                constexpr Demo2 d2 = Demo2(1, 1.23); // error, Demo2 不是聚合类型、且不存在被 constexpr 修饰的构造函数 
+                constexpr Demo3 d31 = Demo3(1, 1.23); // ok, Demo3(1, 1.23) 能编译时计算、得到一个常量对象，能初始化 d31
+                constexpr Demo3 d32 = Demo3(n, 1.23); // error, Demo3(n, 1.23) 无法进行编译时计算、无法得到一个常量对象来初始化 d4
+                </xmp>
+            」］
+
+            ②修饰构造函数其需满足的条件：［i:C++ 的不同标准有不同的要求，对于 C++11 标准则要求函数体必须是空，成员变量使用初始化列表进行初始化；C++14 标准放宽了以上要求，即<br>
+                ＞a. 成员变量使用初始化列表进行初始化；<br>
+                ＞b. 不能包含静态局部变量，非静态局部变量必须初始化为常量；<br>
+                ＞c. 不能涉及运行时操作（如读写全局或静态变量、创建进程或线程、读写文件、网络通信等等），在语法上体现为不能调用不带 constexpr 修饰的函数（若仍然调用不带 constexpr 修饰的函数，则强制运行时调用，此时 constexpr 没有意义）；<br>
+                ＞d. 在 C++14 之后可以抛出异常，但如果触发异常默认会运行时计算，若强制编译时计算（如使用此构造函数创建的对象也被 constexpr 修饰的变量）就会编译失败；「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+
+                class Demo {
+                private:
+                    int _a;
+                    double _d;
+                public:
+                    Demo() :_a(1), _d(1.23) {}
+                    // C++11 编译失败、C++14 编译成功
+                    constexpr Demo(int a, double d) :_a(a), _d(d) {
+                        int n = 0;
+                        if (a == n) {
+                            throw std::runtime_error("a cannot be zeor!");
+                        }
+                    }
+                };
+
+                int main() {
+                    int n = 1;
+
+                    constexpr Demo d1 = Demo(n, 1.23); // error，Demo(n, 1.23) 无法进行编译时计算、无法得到一个常量对象来初始化 d1
+                    constexpr Demo d2 = Demo(1, 1.23); // ok，Demo(1, 1.23) 可以进行编译时计算、可以得到一个常量对象来初始化 d2
+
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ③修饰的构造函数可运行时调用么：［i:可以；］
+
+            ④修饰一般成员函数的条件：［i:除了要满足修饰一般函数时要满足的条件之外（因为类的一般成员函数可以看成是带有 this 指针这个隐藏参数的一般函数），还需要注意<br>
+            ＞给 this 指针加上 const 修饰；<br>
+            ＞对于 C++11 不能修改成员变量；对于 C++14 则放宽了这一限制，否则当该成员函数在运行时调用时就无法修改一般的成员变量了；「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+
+                struct Point { double x, y; };
+
+                class Line {
+                private:
+                    double _k; // 斜率
+                    double _b; // 纵截距
+                public:
+                    // 1) 构造函数
+                    // a. 有参构造函数（两点确定一条直线）
+                    constexpr Line(double x1, double y1, double x2, double y2):
+                        _k(0), _b(0) 
+                    {
+                        if (x1 == x2) {
+                            throw std::runtime_error("x1 cannot be equal to x2!");
+                        }
+                        _k = (y2 - y1) / (x2 - x1);
+                        _b = y1 - _k * x1;
+                    }
+
+                    constexpr Line(Point point1, Point point2) :
+                        _k(0), _b(0) 
+                    {
+                        if (point1.x == point2.x) {
+                            throw std::runtime_error("x1 cannot be equal to x2!");
+                        }
+                        _k = (point2.y - point1.y) / (point2.x - point1.x);
+                        _b = point1.y - _k * point1.x;
+                    }
+
+                    // b. 其他构造函数使用默认的即可
+                    
+                    // 2) 成员函数
+                    // a. 获取和设置斜率
+                    constexpr double get_k() const { return _k; }
+                    void set_k(double k) { _k = k; }
+
+                    // b. 获取和设置截距
+                    constexpr double get_b() const { return _b; }
+                    void set_b(double b) { _b = b; }
+
+                    // c. 求两条直线的交点（行列式算法）
+                    constexpr Point get_inter_point(Line other) const {
+                        /* 检查是否平行 */
+                        if (_k == other._k) {
+                            throw std::runtime_error("Two lines cannot be parallel!");
+                        }
+
+                        Point p = {0, 0};
+
+                        /* 将 y=kx+b 形式的直线变成 ax+by=c 的形式 */
+                        double a1 = -_k;
+                        double a2 = -other._k;
+                        double b1 = 1;
+                        double b2 = 1;
+                        double c1 = _b;
+                        double c2 = other._b;
+                        
+                        /* 行列式求交点的公式 */
+                        p.x = (c1 * b2 - c2 * b1) / (a1 * b2 - a2 * b1);
+                        p.y = (a1 * c2 - a2 * c1) / (a1 * b2 - a2 * b1);
+                        
+                        return p;
+                    }
+                };
+
+                int main(int argc, char** argv) 
+                {
+                    constexpr Point point1 = {0, 0}; // constexpr 可修饰聚合类型
+                    constexpr Point point2 = {1, 2}; // constexpr 可修饰聚合类型
+                    constexpr Point point3 = {-1, 0}; // constexpr 可修饰聚合类型
+                    constexpr Point point4 = {0, 1}; // constexpr 可修饰聚合类型
+
+                    constexpr Line line1(point1, point2); // point1 和 point2 都是常量且两点的横坐标不相等不会触发异常，所以构造函数能编译时计算得到常对象，它是一个常量表达式，能初始化常量对象 line
+                    constexpr Line line2(point3, point4); // 同上
+
+                    // 获取 line1 的斜率和截距
+                    constexpr double k1 = line1.get_k();
+                    constexpr double b1 = line1.get_b();
+
+                    // 求两条直线的交点
+                    constexpr Point inter_point = line1.get_inter_point(line2);
+
+                    std::cout << "the k of line1 is: " << k1 << "\n"
+                        << "the b of line1 is: " << b1 << "\n"
+                        << "the intersection point of line1 and line2 is: (" << inter_point.x << ", " << inter_point.y << ")"
+                        << std::endl;
+
+                    return 0;
+                }
+                </xmp>
+                以上案例分析如下：<br>
+                ＞对于获取斜率和截距的成员函数 get_k() 和 get_b()，只有一条 return 语句且返回的表达式不含运行时操作，所以可以用 constexpr 来修饰；<br>
+                ＞对于求两条直线交点的成员函数 get_inter_point()，参数和返回值都能函数中不含静态成员成员变量、非静态成员变量也都初始化为了常量，不含运行时操作、即没有调用非 constexpr 修饰的函数，只有一条 return 语句，所以可以用 constexpr 来修饰；<br>
+            」］
+
+            ⑤修饰一般成员函数时何时编译时调用：［i:第一，函数调用之前必须先编译其定义语句；第二，实参必须都是编译时常量，这隐含地要求了只能通过编译时常量对象调用，因为它实际上是 this 这个隐藏参数的实参；「i:例如对于上一个问题中的直线类」］［b:「b:
+                <xmp>
+                #include <iostream>
+
+                struct Point { double x, y; };
+
+                class Line {
+                    ...
+                };
+
+                int main(int argc, char** argv) 
+                {
+                    constexpr Point point1 = {0, 0}; 
+                    constexpr Point point2 = {1, 2};
+                    constexpr Point point3 = {-1, 0}; 
+                    constexpr Point point4 = {0, 1}; 
+                    Point point5 = {-1, 0};
+                    Point point6 = {0, 1};
+
+                    constexpr Line line1(point1, point2); 
+                    constexpr Line line2(point3, point4); 
+                    Line line3(point5, point6);
+
+                    // 获取 line1 的斜率和截距
+                    constexpr double k1 = line1.get_k();
+                    constexpr double b1 = line1.get_b();
+
+                    // 获取 line3 的斜率和截距 
+                    double k3 = line3.get_k();
+                    double b3 = line3.get_b();
+
+                    // 求 line1 和 line2 的交点
+                    constexpr Point inter_point12 = line1.get_inter_point(line2);
+
+                    // 求 line1 和 line3 的交点
+                    Point inter_point13 = line1.get_inter_point(line3);
+                    Point inter_point31 = line3.get_inter_point(line1);
+
+                    std::cout << ... << std::endl;
+
+                    return 0;
+                }
+                </xmp>
+                以上案例分析如下：<br>
+                ＞对于获取 line1 的斜率和截距的成员函数 get_k() 和 get_b() 的调用，由于 line1 是编译时常量对象、使得这两个函数的参数都可以编译时计算，因此这两个函数也能编译时调用和计算返回值，进而 k1 和 b1 也能被 constexpr 修饰；<br>
+                ＞对于获取 line3 的斜率和截距的成员函数 get_k() 和 get_b() 的调用，由于 line3 是非常对象、使得这两个函数的参数只能运行时计算，即这两个函数只能运行时调用，进而 k1 和 b1 也只能运行时求值、不能被 constexpr 修饰；<br>
+                ＞对于求 line1 和 line2 这两条直线交点的成员函数 get_inter_point() 的调用，由于 line1 和 line2 都是编译时常量对象，使得这个函数的实参都可以编译时计算，且 line1 和 line2 并不平行、不会触发异常，因此这个函数也会编译时调用和计算返回值，进而 inter_point12 也能编译时求值、可以被 constexpr 修饰；<br>
+                ＞对于求 line1 和 line3 这两条直线交点的成员函数 get_inter_point() 的调用，由于 line3 不是编译时常量对象，使得这个函数的实参不全都能编译时求值，因此这个函数只能运行时调用和计算返回值，进而 inter_point12 也不能编译时求值、不可以被 constexpr 修饰；
+            」］
+
+            ⑥能修饰虚函数么、为何：［i:不可以修饰虚函数（因为虚函数用于实现运行时多态，必然涉及运行时）；］
+
+            ⑦能修饰普通成员变量么、有何用途：［i:C++11 不可以；C++14 起可以了，表示当前类型的任意对象在编译时就已经确定了一个成员变量的值，但是需要满足以下条件<br>
+                ＞a. 初始化方式：声明时初始化或在 constexpr 修饰的构造函数中进行初始化；<br>
+                ＞b. 不能和 mutable 修饰（mutable 关键字能让其修饰的成员变量在 this 指针带有 const 修饰的成员函数中也能被修改）联用；<br>
+                ＞constexpr 修饰的成员变量一般用于集中管理其他成员变量的默认初始值；「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+
+                class Point {
+                private:
+                    constexpr int DEFAULT_X = 0;  // 非静态constexpr成员
+                    constexpr int DEFAULT_Y = 0;
+                    
+                    int x;
+                    int y;
+                    
+                public:
+                    // 编译时常量方法
+                    constexpr int getDefaultX() const { return DEFAULT_X; }
+                    constexpr int getDefaultY() const { return DEFAULT_Y; }
+                    
+                    // constexpr构造函数
+                    constexpr Point(int x = DEFAULT_X, int y = DEFAULT_Y) 
+                        : x(x), y(y) {}
+                    
+                    constexpr int getX() const { return x; }
+                    constexpr int getY() const { return y; }
+                    
+                    // constexpr成员函数可以修改非constexpr成员（C++14）
+                    constexpr void setX(int newX) { x = newX; }
+                    constexpr void setY(int newY) { y = newY; }
+                };
+
+                class Circle {
+                private:
+                    constexpr static double PI = 3.1415926535;  // 静态constexpr
+                    constexpr static int DEFAULT_RADIUS = 1;
+                    
+                    int radius;
+                    
+                public:
+                    constexpr Circle(int r = DEFAULT_RADIUS) : radius(r) {}
+                    
+                    constexpr double area() const {
+                        return PI * radius * radius;
+                    }
+                };
+
+                int main() {
+                    // 编译时计算
+                    constexpr Point p1(10, 20);
+                    constexpr int x = p1.getX();  // 编译时已知：10
+                    
+                    constexpr Circle c(5);
+                    constexpr double a = c.area();  // 编译时计算面积
+                    
+                    // 运行时使用
+                    Point p2(30, 40);
+                    int runtime_x = p2.getX();
+                    
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ⑧与 const 修饰普通成员变量的异同：［i:相同点都是常属性，即无法运行时修改；不同点为 const 修饰的成员变量可能是运行时常量、也可能是编译时常量（取决于其所在的对象是不是编译时常量），可以在一切构造函数中初始化，事实上它除了常属性之外与普通成员变量没有区别；constexpr 修饰的成员变量一定是编译时常量、即使它所在的对象是运行时的变量，而且需要声明时初始化或在编译时构造函数中初始化；「i:例如」］［b:「b:
+                <xmp>
+                class Demo {
+                private:
+                    const int normal_const; 
+                    constexpr int constexpr_val; 
+                    
+                public:
+                    Demo(int a, int b) 
+                        : normal_const(a)   // ok，运行时常量在构造函数初始化
+                        // constexpr_val(b) // error，constexpr成员不能用非constexpr构造函数初始化
+                    {}
+                    
+                    constexpr Demo(int a) 
+                        : normal_const(a), constexpr_val(a)  // ok，constexpr构造函数可以初始化两者
+                    {}
+                };
+                </xmp>
+            」］
+
+            ⑨修饰静态成员变量、有何用途：［i:只能在声明时初始化（注意 C++17 之前需要再类外定义，C++17 之后就不需要了）；广泛用于模板元编程和编译时计算；「i:例如」］［b:「b:
+                <xmp>
+                class Demo {
+                public:
+                    constexpr static int STATIC_VAL = 100;   // 静态：所有对象共享
+                    constexpr int NON_STATIC_VAL = 200;      // 非静态：每个对象有自己的副本
+                };
+
+                // C++17前需要这样（C++17后不需要）
+                constexpr int Demo::STATIC_VAL;
+                </xmp>
+                <xmp>
+                // 编译时类型比较
+                namespace mystd {
+                    // 主模板
+                    template<typename T, typename U>
+                    struct is_same {
+                        static constexpr bool value = false;
+                    };
+                    
+                    // 特化：当两个类型参数完全相同时
+                    template<typename T>
+                    struct is_same<T, T> {
+                        static constexpr bool value = true;
+                    };
+                }
+
+                int main(int argc, char** argv) 
+                {
+                    static_assert(mystd::is_same<
+                        decltype("hello"),
+                        const char[6]
+                    >::value);
+
+                    return 0;
+                }
+                </xmp>
+            」］
+    </article>
+    <script src="js/global.js"></script>
+</body>

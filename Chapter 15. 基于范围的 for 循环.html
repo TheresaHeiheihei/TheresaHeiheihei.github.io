@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chapter 15. 基于范围的 for 循环</title>
+    <!-- 0. 全局样式表 -->
+    <link rel="stylesheet" href="css/global.css">
+    <!-- 1. 引入 Highlight.js 样式表（这里使用默认主题） -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <!-- 2. 引入 Highlight.js 核心库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- 3. 按需引入 C++ 语言插件（如果使用 ES6 模块，则可以直接使用核心库的内置支持，无需单独引入） -->
+    <!--
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+    -->
+</head>
+<body>
+    <article>
+        [页眉: 15. 基于范围的 for 循环]
+        1) 语法格式：
+            ①语法格式：［i:语法格式为］［b:
+                ```c++
+                for (<i>decl</i> : <i>coll</i>) {
+                    <i>statement</i>
+                }
+                // decl 即符号声明（如 int n、auto a、const std::string& str、auto&& r 等）；
+                // 声明的符号代表集合中的每个元素的拷贝（当使用非引用类型或自动推导为非引用类型时）或引用/本身（使用引用类型或自动推导为引用类型时）；
+                // coll 代表一个集合，可以是数组、STL 容器、支持迭代器的自定义容器；
+                // statement 代表对每个元素的操作；
+                ```
+            ］
+            ②使用值传递/左值引用/常左值引用/右值引用/通用引用的对应情况：［b:
+                &emsp;&nbsp;a.小对象类型、不需要修改元素 => 值传递；<br>
+                &emsp;&nbsp;b.大对象类型、不需要修改元素 => 常左值引用；<br>
+                &emsp;&nbsp;c.需要修改元素、左值集合 => 左值/通用引用；<br>
+                &emsp;&nbsp;d.需要修改元素、右值集合 => 右值/通用引用；<br>
+            ］
+            ③decl 中的类型是否必须与元素类型一致：［i:可以不一致，但是元素类型必须能隐式转换为 decl 中指定的类型；「i:例如以下代码就会编译失败」］［b:「b:
+                ```c++
+                class C {
+                    ...
+                    // 可以将 std::string 转换为 C 类型、但禁止隐式类型转换
+                    explicit C(const std::string& str) {
+                        ...
+                    }
+                    ...
+                };
+
+                // 元素类型为 std::string 类型的 vector 容器
+                std::vector&lt;std::string&gt; vec;
+
+                // 理论上 decl 中的类型应该用 std::string，但是这里用了 C，而且 std::string 不能隐式转换为 C，因此以下代码编译失败
+                for (const C& elem : vec) {
+                    ...
+                }
+                ```
+            」］
+        2) 本质：［b:
+                ```c++
+                // 若 coll 支持内部迭代器
+                for (auto _pos = <i>coll</i>.begin(); _pos != <i>coll</i>.end(); ++_pos) {
+                    <i>decl</i> = *_pos;
+                    <i>statement</i>
+                }
+
+                // 若 coll 仅支持外部迭代器
+                for (auto _pos = begin(<i>coll</i>); _pos != end(<i>coll</i>); ++_pos) {
+                    // 注意 begin() 和 end() 无作用域限定符，会触发普通查找和实参依赖查找（ADL）
+                    <i>decl</i> = *_pos;
+                    <i>statement</i>
+                }
+                ```
+                对于第二种情况，begin() 和 end() 都是无作用域限定的函数调用，会触发普通查找和实参依赖查找；因此对于 STL 容器而言，调用的其实是 std 命名空间中的 std::beign() 和 std::end()，它们都是 C++ 20 引入的函数；「i:例如」「b:
+                    ```c++
+                    template &lt;typename T&gt;
+                    void foo(const T& coll) {
+                        for (const auto& e : coll) {
+                            ...
+                        }
+                    }
+
+                    // 若 T 存在内部迭代器，则其本质为
+                    template &lt;typename T&gt;
+                    void foo(const T& coll) {
+                        for (auto _pos = coll.begin(); _pos != coll.end();  ++_pos) {
+                            const auto& e = *_pos;
+                            ...
+                        }
+                    }
+                    ```
+                」
+            ］
+        3) 自定义容器支持基于范围 for 循环：［b:
+                &emsp;&nbsp;a.对于元素连续存储的容器，提供内部或外部的返回首元素的 begin()、返回尾元素的下一个位置的 end()；<br>
+                &emsp;&nbsp;b.对于元素非连续存储的容器，提供内部或外部的返回首元素迭代器的 begin()、返回尾元素的下一个位置的迭代器的 end()，并且其迭代器要重载不等于、自增和解引用运算符；「i:注意元素非连续存储的容器要想使用基于范围的 for 循环、begin() 和 end() 只能返回迭代器而不是元素或节点指针，因为元素或节点指针的自增并不会得到下一个元素或节点的地址，而使用迭代器可以重载自增运算符，让对迭代器自增后能正确指向下一个元素或节点；」<br>
+                「b:&emsp;&nbsp;例如
+                    ```c++
+                    // 演示元素连续存储时提供内部 begin/end() 方法
+                    #include &lt;iostream&gt;
+                    #include &lt;cstring&gt;
+                    
+                    class SqList {
+                    private:
+                        int* __base;
+                        std::size_t __length;
+                        std::size_t __size;
+                    public:
+                        // 默认构造：构造一个空的顺序表
+                        SqList() :
+                            __base(nullptr),
+                            __length(0),
+                            __size(0)
+                        {}
+                    
+                        // 从数组构造
+                        SqList(const int* arr, std::size_t length) :
+                            __base(new int[length]{0}),
+                            __length(length),
+                            __size(length * sizeof(int))
+                        {
+                            ::memcpy(__base, arr, length * sizeof(int));
+                        }
+                    
+                        // 支持列表初始化
+                        SqList(std::initializer_list&lt;int&gt; init_list) :
+                            __base(new int[init_list.size()]{0}),
+                            __length(init_list.size()),
+                            __size(init_list.size() * sizeof(int))
+                        {
+                            std::size_t index = 0;
+                            for (auto _pos = init_list.begin(); _pos != init_list.end(); ++_pos, ++index) {
+                                __base[index] = *_pos;
+                            }
+                        }
+                    
+                        // 析构：销毁顺序表
+                        ~SqList() {
+                            delete[] __base;
+                            __base = nullptr;
+                            __length = 0;
+                            __size = 0;
+                        }
+                    
+                        // 根据索引获取元素（无需检查 index 是否越界，因为若越界则是未定义行为、与一般数组一致）
+                        int operator[](std::size_t index) { return __base[index]; }
+                        int operator[](std::size_t index) const { return __base[index]; }
+                    
+                        // 获取长度
+                        std::size_t get_length() { return __length; }
+                        std::size_t get_length() const { return __length; }
+                    
+                        // ...（其他方法，如清空、判空、插入删除元素、排序等）
+                    
+                        // ----------------------------------
+                        // 注意 end() 返回尾元素的后一个位置
+                        int* begin() { return __base; }
+                        const int* begin() const { return __base; }
+                        int* end()   { return __base + __length; }
+                        const int* end()   const { return __base + __length; }
+                        //-----------------------------------
+                    };
+                    
+                    int main(int argc, char** argv) {
+                        int arr[3] = {1, 2, 3};
+                    
+                        SqList list1(arr, 3);
+                        SqList list2 = {4, 5, 6};
+                    
+                        // 传统 for 循环
+                        for (std::size_t i = 0; i &lt; list1.get_length(); ++i) {
+                            std::cout &lt;&lt; list1[i] &lt;&lt; std::endl;
+                        }
+
+                        // 使用内部 begin() 和 end() 的 for 循环
+                        for (int* p = list1.begin(); p != list1.end(); ++p) {
+                            std::cout &lt;&lt; *p &lt;&lt; std::endl;
+                        }
+                    
+                        // 基于范围的 for 循环
+                        for (int elem : list2) {
+                            std::cout &lt;&lt; elem &lt;&lt; std::endl;
+                        }
+                    
+                        return 0;
+                    }
+                    ```
+                    ```c++
+                    // 演示元素连续存储时提供外部 begin() 和 end() 的情况
+                    #include &lt;iostream&gt;
+                    #include &lt;cstring&gt;
+
+                    namespace ns {
+                        class SqList {
+                        private:
+                            int* __base;
+                            std::size_t __length;
+                            std::size_t __size;
+                        public:
+                            // 默认构造：构造一个空的顺序表
+                            SqList() :
+                                __base(nullptr),
+                                __length(0),
+                                __size(0)
+                            {}
+
+                            // 从数组构造
+                            SqList(const int* arr, std::size_t length) :
+                                __base(new int[length]{0}),
+                                __length(length),
+                                __size(length * sizeof(int))
+                            {
+                                ::memcpy(__base, arr, length * sizeof(int));
+                            }
+
+                            // 支持列表初始化
+                            SqList(std::initializer_list&lt;int&gt; init_list) :
+                                __base(new int[init_list.size()]{0}),
+                                __length(init_list.size()),
+                                __size(init_list.size() * sizeof(int))
+                            {
+                                std::size_t index = 0;
+                                for (auto _pos = init_list.begin(); _pos != init_list.end(); ++_pos, ++index) {
+                                    __base[index] = *_pos;
+                                }
+                            }
+
+                            // 析构：销毁顺序表
+                            ~SqList() {
+                                delete[] __base;
+                                __base = nullptr;
+                                __length = 0;
+                                __size = 0;
+                            }
+
+                            // 根据索引获取元素（无需检查 index 是否越界，因为若越界则是未定义行为、与一般数组一致）
+                            int operator[](std::size_t index) { return __base[index]; }
+                            int operator[](std::size_t index) const { return __base[index]; }
+
+                            // 获取长度
+                            std::size_t get_length() { return __length; }
+                            std::size_t get_length() const { return __length; }
+
+                            // ...（其他方法，如清空、判空、插入删除元素、排序等）
+
+                            // begin() 和 end() 的友元声明
+                            friend int* begin(SqList&amp; list);
+                            friend const int* begin(const SqList&amp; list);
+                            friend int* end(SqList&amp; list);
+                            friend const int* end(const SqList&amp; list);
+                        };
+
+                        // ----------------------------------
+                        // 注意 end() 返回尾元素的后一个位置
+                        int* begin(SqList&amp; list) { return list.__base; }
+                        const int* begin(const SqList&amp; list) { return list.__base; }
+                        int* end(SqList&amp; list) { return list.__base + list.__length; }
+                        const int* end(const SqList&amp; list) { return list.__base + list.__length; }
+                        //-----------------------------------
+                    }
+
+                    int main(int argc, char** argv) {
+                        int arr[3] = {1, 2, 3};
+
+                        ns::SqList list1(arr, 3);
+                        ns::SqList list2 = {4, 5, 6};
+
+                        // 传统 for 循环
+                        for (std::size_t i = 0; i &lt; list1.get_length(); ++i) {
+                            std::cout &lt;&lt; list1[i] &lt;&lt; std::endl;
+                        }
+
+                        // 使用外部 begin() 和 end() 的 for 循环（触发 ADL 查找）
+                        for (int* p = begin(list1); p != end(list1); ++p) {
+                            std::cout &lt;&lt; *p &lt;&lt; std::endl;
+                        }
+
+                        // 基于范围的 for 循环
+                        for (int elem : list2) {
+                            std::cout &lt;&lt; elem &lt;&lt; std::endl;
+                        }
+
+                        return 0;
+                    }
+                    ```
+                    ```c++
+                    // 演示元素非连续存储时提供内部或外部的 begin()、end() 函数和其迭代器的重载自增、解引用、不等于运算符的函数
+                    #include &lt;iostream&gt;
+                    
+                    // 单链表
+                    class LinkList {
+                    private:
+                        // 节点类型
+                        struct Node {
+                            int __data;
+                            Node* __next;
+                    
+                            Node() : 
+                                __data(0),
+                                __next(nullptr)
+                            {}
+                            Node(int data, Node* next) :
+                                __data(data),
+                                __next(next)
+                            {}
+                        };
+                    private:
+                        Node* __base; // 头指针
+                        std::size_t __length; // 长度
+                    public:
+                        LinkList() :
+                            __base(new Node(0, nullptr)), // 创建头结点
+                            __length(0)
+                        {}
+                    
+                        // 让链表支持从数组初始化
+                        /*
+                        // 问题原因：使用 new T[] 分配的内存只能用 delete[] 释放
+                        LinkList(const int* arr, std::size_t length) :
+                            __base(length &gt; 0 ? 
+                                new Node[length + 1] :
+                                new Node(0, nullptr)
+                            ),
+                            __length(length)
+                        {
+                            // 初始化头结点
+                            __base[0].__data = 0;
+                            __base[0].__next = __length &gt; 0 ? &amp;__base[1] : nullptr;
+                            
+                            // 初始化各数据节点
+                            for (std::size_t i = 0; i &lt; length; ++i) 
+                            {
+                                __base[i + 1].__data = arr[i];
+                                __base[i + 1].__next = i + 1 &lt; __length ? &amp;__base[i + 2] : nullptr;
+                            }
+                        }
+                        */
+                        LinkList(const int* arr, std::size_t length) :
+                            __base(new Node),
+                            __length(length)
+                        {
+                            Node* p = __base;
+                            for (std::size_t i = 0; i &lt; length; i++) {
+                                p-&gt;__next = new Node(arr[i], nullptr);
+                                p = p-&gt;__next;
+                            }
+                        }
+                    
+                        // 让链表支持列表初始化
+                        /*
+                        // 问题原因：使用 new T[] 分配的内存只能用 delete[] 释放
+                        LinkList(std::initializer_list&lt;int&gt; init_list) :
+                            __base(init_list.size() &gt; 0 ? 
+                                new Node[init_list.size() + 1] :
+                                new Node(0, nullptr)
+                            ),
+                            __length(init_list.size())
+                        {
+                            // 初始化头结点
+                            __base[0].__data = 0;
+                            __base[0].__next = __length &gt; 0 ? &amp;__base[1] : nullptr;
+                            
+                            // 初始化各数据节点
+                            std::size_t index = 1U;
+                            for (auto _pos = init_list.begin(); _pos != init_list.end(); ++_pos, ++index) 
+                            {
+                                __base[index].__data = *_pos;
+                                __base[index].__next = index &lt; __length ? &amp;__base[index + 1] : nullptr;
+                            }
+                        }
+                        */
+                        LinkList(std::initializer_list&lt;int&gt; init_list) :
+                            __base(new Node),
+                            __length(init_list.size())
+                        {
+                            Node* p = __base;
+                            for (auto _pos = init_list.begin(); _pos != init_list.end(); ++_pos) {
+                                p-&gt;__next = new Node(*_pos, nullptr);
+                                p = p-&gt;__next;
+                            }
+                        }
+                    
+                        ~LinkList() 
+                        {
+                            Node* p = __base;
+                            Node* p_next = __base-&gt;__next;
+                            for(;;) {
+                                delete p;
+                                p = p_next;
+                                if (!p_next) break;
+                                p_next = p_next-&gt;__next;
+                            }
+                    
+                            __base = nullptr;
+                            __length = 0;
+                        }
+                    
+                    public: 
+                        // (单向)迭代器
+                        class Iterator {
+                            friend class LinkList;
+                        private:
+                            Node* __p;
+                        private:
+                            Iterator() {}
+                        public:
+                            // 前自增（先自增后反回其本身）
+                            Iterator&amp; operator++() {
+                                __p = __p-&gt;__next;
+                                return *this;
+                            }
+                            // 后自增（自增后返回自增前的副本）
+                            Iterator operator++(int) {
+                                Iterator tmp = *this;
+                                __p = __p-&gt;__next;
+                                return tmp;
+                            }
+                            // 解引用
+                            int operator*() {
+                                return __p-&gt;__data;
+                            }
+                            int operator*() const {
+                                return __p-&gt;__data;
+                            }
+                            // 不相等
+                            bool operator!=(const Iterator&amp; other) {
+                                return other.__p != this-&gt;__p;
+                            }
+                            bool operator!=(const Iterator&amp; other) const {
+                                return other.__p != this-&gt;__p;
+                            }
+                            // ...（其他方法）
+                        };
+                    <!---->
+                    public:
+                        // 能返回首尾元素迭代器的 begin() 和 end() 函数
+                        Iterator begin() {
+                            Iterator _pos;
+                            _pos.__p = __base-&gt;__next;
+                            return _pos;
+                        }
+                        const Iterator begin() const {
+                            Iterator _pos;
+                            _pos.__p = __base-&gt;__next;
+                            return _pos;
+                        }
+                        Iterator end() {
+                            /*
+                                // 问题原因：标准库中 end() 返回尾元素的下一个位置，因此对于单链表和单向迭代器可直接返回 nullptr
+                                Iterator _pos;
+                                Node* p = __base;
+                                while (p-&gt;__next) {
+                                    p = p-&gt;__next;
+                                }
+                                _pos.__p = p-&gt;__next;
+                                return _pos;
+                            */
+                            Iterator _pos;
+                            _pos.__p = nullptr;
+                            return _pos;
+                        }
+                        const Iterator end() const {
+                            /*
+                                // 问题原因：标准库中 end() 返回尾元素的下一个位置，因此对于单链表和单向迭代器可直接返回 nullptr
+                                Iterator _pos;
+                                Node* p = __base;
+                                while (p-&gt;__next) {
+                                    p = p-&gt;__next;
+                                }
+                                _pos.__p = p-&gt;__next;
+                                return _pos;
+                            */
+                            Iterator _pos;
+                            _pos.__p = nullptr;
+                            return _pos;
+                        }
+                    };
+                    
+                    int main(int argc, char** argv) {
+                        int arr[3] = {1, 2, 3};
+                    
+                        LinkList list1(arr, 3);
+                        LinkList list2 = {4, 5, 6};
+                    
+                        for (LinkList::Iterator _pos = list1.begin(); _pos != list1.end(); ++_pos) {
+                            std::cout &lt;&lt; *_pos &lt;&lt; std::endl;
+                        }
+                        for (int elem : list2) {
+                            std::cout &lt;&lt; elem &lt;&lt; std::endl;
+                        }
+                    
+                        return 0;
+                    }
+                    ```
+                」
+            ］
+    </article>
+    <script src="js/global.js"></script>
+</body>
+</html>

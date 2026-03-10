@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户定义字面量</title>
+    <!-- 0. 全局样式表 -->
+    <link rel="stylesheet" href="css/global.css">
+    <!-- 1. 引入 Highlight.js 样式表（这里使用默认主题） -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <!-- 2. 引入 Highlight.js 核心库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- 3. 按需引入 C++ 语言插件（如果使用 ES6 模块，则可以直接使用核心库的内置支持，无需单独引入） -->
+    <!--
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+    -->
+</head>
+<body>
+    <article>
+    [页眉: 30. 用户定义字面量] 
+        <h3>1. 基本概念</h3>
+        1) C++ 中的各种字面量：［i:在 C++ 标准中一般认为存在以下五种字面量<br>
+            &emsp;&nbsp;a. 整型字面量：如 123, 12l, 11u, 7lu 等；<br>
+            &emsp;&nbsp;b. 浮点型字面量：如 1.23, 1.23f 等；<br>
+            &emsp;&nbsp;c. 布尔型字面量：如 true，false；<br>
+            &emsp;&nbsp;d. 字符型字面量：如 '1', 'a' 等；<br>
+            &emsp;&nbsp;e. 字符串字面量：如 "hello", "123" 等； 
+        ］
+
+
+        2) 传统字面量的痛点：［i:传统数字型字面量如 3600、3.14 等存在以下痛点<br>
+            &emsp;&nbsp;a. 隐藏了业务语义，导致代码缺乏可读性；「i:如代码中的 `if (dur > 86400)`、`int distance = 100` 等，其中的 86400 和 100 如果缺少必要的注释或明显的上下文解释，会让代码阅读者（包括未来的自己）无法立即理解这些数字的含义（如为啥 dur 大于 86400 就执行后面的操作？100 表示厘米还是米还是英尺等等）；」<br>
+            &emsp;&nbsp;b. 仅基本类型支持使用字面量，自定义类型无法使用字面量、最多通过临时对象实现类似效果，但是写法仍然比较复杂；「i:例如定义了一个表示秒数的 seconds 类，我们希望存在类似“1s、1.23s”的形式来简洁的表示一个 seconds 对象，而不是每次都定义具名对象并初始化再使用，即便用临时对象`seconds(1)`、`seconds(1.23)`、也需要每次都书写构造函数调用`seconds()`；」
+        ］
+
+
+        3) 什么是用户定义字面量：［i:用户定义字面量能同时携带数值和业务语义（如单位）信息；「i:例如定义了一个表示秒数的 seconds 类，则可以通过用户定义字面量让形如“1s、1.23s”的标识符分别表示 1s 和 1.23s，且让它们都是 seconds 的临时对象；」］
+
+        <h3>2. 用户定义字面量的使用</h3>
+        1) 用户定义字面量的基本使用（C++11）：［b:
+            ```c++
+            返回值类型 operator"" 后缀(类型 形参) {
+                statement
+            }
+
+            // 返回值类型指定了用户定义字面量表示的对象的类型，可以是自定义类型和基本类型
+            // operator"" 和后面的空格是固定写法
+            // 后缀可自定义、需满足标识符明明规则，一般只使用一个或少量字母，对于我们自己定义的后缀一般以单下划线做为开头，因为没下划线和双下划线一般是标准库的做法
+            // 形参用于接收用户定义字面量中的数值部分，形参类型只能是以下类型
+                unsigned long long（std::size_t） // 整型 
+                long double       // 浮点 
+                const char*       // 字符串 
+                const wchar_t*    // 宽字节字符串
+                const char16_t*   // 16 位数序列
+                const char32_t*   // 32 位数序列
+            // statement 用于对用户定义字面量中的数值进行处理、并返回此用户定义字面量真正代表的对象
+            ```
+            「i:例如」「b:
+                ```c++
+                // 假定基本数字类型（int， double 等）的单位为米
+                #include &lt;iostream&gt;
+                #include &lt;cmath&gt;
+
+                long double operator"" _m(long double count) {
+                    return count;
+                }
+
+                long double operator"" _cm(long double count) {
+                    return count / 100;
+                } 
+
+                long double compute_distance(long double x1, long double y1, long double x2, long double y2) {
+                    return ::sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+                }
+
+                int main(int argc, char** argv) {
+                    auto res1 = compute_distance(0.1, 0, 0.13, 0.04);
+                    auto res2 = compute_distance(0.1_m, 0.0_m, 13.0_cm, 4.0_cm);
+                    std::cout &lt;&lt; res1 &lt;&lt; " " &lt;&lt; res2 &lt;&lt; std::endl; // 返回 0.05 0.05
+
+                    return 0;
+                }
+                ```
+                「i:显然，使用用户定义字面量计算 res2 的可读性要比使用字面量计算 res1 的可读性强上不少，用户能一眼看出 compute_distance() 各个参数的含义；」
+            」
+        ］
+
+        2) 编译时计算用户定义字面量的值（C++14）：［i:用 constexpr 修饰 operator"" 即可；即］［b:
+            ```c++
+            constexpr 返回值类型 operator"" 后缀(类型 形参) {
+                statement
+            }
+            
+            // 与 constexpr 修饰一般函数一样，对函数及其调用有以下限制 
+            /* 
+             * 1) 函数体限制：
+             *    a. 所有局部变量都要初始化为编译时常量；
+             *    b. 应尽量只包含一个 return 语句，因为多个 return 语句往往意味着要根据运行时条件决定要返回什么值；
+             * 2) 编译期求值：constexpr 函数只能包含编译期可求值的语句，不能包含运行期语句；
+             * 3) 返回类型和参数类型：constexpr 函数的返回类型和所有参数类型必须是字面值类型；
+             */
+            // 其中 1) 和 3) 对于用户定义字面量自然满足，只需要注意 2) 即可；
+            ```
+            「i:例如我们可以对前面求两个点之间距离的例子做以下优化」「b:
+                ```c++
+                // 假定基本数字类型（int， double 等）的单位为米
+                #include &lt;iostream&gt;
+                #include &lt;cmath&gt;
+
+                constexpr long double operator"" _m(long double count) {
+                    return count;
+                }
+
+                constexpr long double operator"" _cm(long double count) {
+                    return count / 100;
+                } 
+
+                long double compute_distance(long double x1, long double y1, long double x2, long double y2) {
+                    return ::sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+                }
+
+                int main(int argc, char** argv) {
+                    auto res1 = compute_distance(0.1, 0, 0.13, 0.04);
+                    auto res2 = compute_distance(0.1_m, 0.0_m, 13.0_cm, 4.0_cm);
+                    std::cout &lt;&lt; res1 &lt;&lt; " " &lt;&lt; res2 &lt;&lt; std::endl; // 返回 0.05 0.05
+
+                    return 0;
+                }
+                ```
+                「i:同样，使用用户定义字面量计算 res2 的可读性要比使用字面量计算 res1 的可读性强上不少，用户能一眼看出 compute_distance() 各个参数的含义；」
+            」
+        ］
+
+        
+        3) 练习 - 让 1010_b 表示一个二进制数：［i:算法为——让数值依次除以 1、10、100、……每次得到的商如果是 1，就让结果加上 2 的次数次幂，如果商是 0，就什么都不做；］［b:
+            ```c++
+            constexpr unsigned long long operator"" _b(unsigned long long bin) {
+                unsigned long long res = 0;
+                
+                unsigned long long base = 1; // 依次变成 1、10、100 ...
+                int i = 0; // 依次变成 1、2、3 ...
+                unsigned long long quotient = 0; // 记录 bin/base 的值
+                while ((quotient = bin / base) &gt; 0) {
+                    if (quotient % 10 == 1) {
+                        res += ::pow(2, i);
+                    }
+                    else if (quotient % 10 == 0) {}
+                    else {
+                        // C++14
+                        throw std::runtime_error("Binary literal contains non-binary digit (2-9)...");
+                    }
+
+                    ++i;
+                    base *= 10;
+                }
+
+                return res;
+            }
+            ```
+            注意在 C++14 中，constexpr 修饰的函数可以抛出异常，但只能在运行时；即如果使用合法的用户定义字面量如 111_b，则每次走的都是 if 分支、所有语句都可以编译时计算，因此就会编译时计算 111_b 的值；但如果包含非二进制字符，如 21_b，则必然会走一次 else 分支，其中包含运行时才能执行的代码，因此 21_b 只会在运行时计算并抛出异常；
+        ］
+    </article>
+    <script src="js/global.js"></script>
+</body>

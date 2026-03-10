@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>vector 容器</title>
+    <!-- 0. 全局样式表 -->
+    <link rel="stylesheet" href="css/global.css">
+    <!-- 1. 引入 Highlight.js 样式表（这里使用默认主题） -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <!-- 2. 引入 Highlight.js 核心库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- 3. 按需引入 C++ 语言插件（如果使用 ES6 模块，则可以直接使用核心库的内置支持，无需单独引入） -->
+    <!--
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+    -->
+</head>
+<body>
+    <article>
+    [页眉: 40. vector 容器]
+        <h3>1. 基本概念</h3>
+        1) vector 容器特点：［i:<br>
+            ＞a. 数据结构为线性表「i:（除了起始元素和终端元素之外，其他元素有且仅有一个直接前趋元素和直接后继元素，起始元素有且仅有一个直接后继元素，终端元素有且仅有一个起始元素）」，存储结构为顺序表「i:（顺序存储、地址连续）」；<br>
+            ＞b. 元素类型一致；<br>
+            ＞c. 支持快速随机访问「i:（通过索引/下标直接访问对应元素、算法复杂度为 O(1)）」；<br>
+            ＞d. 插入和删除元素效率较低，具体来说，在表头和表中插入和删除元素的效率较低、仅在表尾插入元素是高效的「i:（例如在有 10 个元素的 vector 中的第二个元素的后面插入元素，则必须依次将第 10 个元素移动到第 11 个元素的位置、第 9 个元素移动到第 10 个元素的位置、……、第 3 个元素移动到第 4 个元素的位置，然后将要插入的元素放在空出的第 2 个元素的位置，算法复杂度为 O(n)）」；<br>
+            ＞e. 内存重分配机制——vector 容器存在一个最大元素个数的限制，即容量，如果执行完它的某个成员函数后元素个数超过了当前 vector 容器的容量或增加了容量本身，系统就会为该 vector 容器重新分配一段更大的内存空间并将原容器中的元素转移（拷贝/移动）到这段新的内存空间中；
+        ］
+
+        2) vector 类型的声明：［b:
+            <xmp>
+            template <class Type, class Allocator = allocator<Type>>
+            class vector;
+
+            // Type：元素类型
+            // Allocator：分配器类型，可缺省，默认为 allocator<Type>（分配器使用户能够自己控制各元素内存分配和释放的具体细节，不常用）
+            </xmp>
+        ］
+
+        3) 注意点：［qb:
+            ＞a. 某一时刻获取的元素迭代器（如通过 vector 对象的`begin()`和`end()`方法获取的首尾元素迭代器）是否一直有效？为什么？<br>
+            ＞b. std::vector&lt;bool> 是 std::vector&lt;> 模板类型的一个具体类么？为什么？std::vector&lt;bool> 存储结构有什么特点？
+        ］［b:答案:<br>
+            ＞a. 某一时刻获取的元素迭代器（如通过 vector 对象的`begin()`和`end()`方法获取的首尾元素迭代器）不一定一直有效，因为 vector 存在内存重分配机制，如果发生内存重分配，这个元素迭代器仍然指向原内存空间中的对应元素而不是扩容后的新的内存空间中的对应元素，仍然使用这个迭代器访问元素会导致未定义行为；<br>
+            ＞b. std::vector&lt;bool> 不是 std::vector&lt;> 的一个具体类而是它的一个特化类模板；因为如果 std::vector&lt;bool> 是 std::vector&lt;> 模板类型的一个具体类，由于结构体/类存在内存对齐机制「i:（结构体/类默认使用 4 字节对齐，即一个成员变量的内存占用将向上对齐到 4n, n≥1 子节，例如若一个成员变量大小为 3 子节，则它实际占用 4 子节，若它的大小为 6 子节，则它实际占用 8 子节）」，则每个布尔值都要用 4 子节进行存储，这浪费了大量内存空间，因此标准库针对 bool 类型对 std::vector&lt;> 类模板做了特化，使得 std::vector&lt;bool> 使用一个位（bit）来存储一个布尔值，节省了大量内存空间；
+        ］
+
+
+        <h3>2. 使用方法</h3>
+        1) 头文件与命名空间：［i:头文件 &lt;vector>，命名空间 std；］
+
+
+        2) 创建 vector 容器（写出案例并想象存储结构即可）：
+            ①创建一个空的 vector 容器：［i:默认构造函数；「i:例如」］［b:「i:
+                <xmp>
+                std::vector<int> vec;
+                </xmp>
+            」］
+
+            ②创建具有确定容量的 vector 容器：［i:一个参数的构造函数，该参数用于接收容量；「i:例如」］［b:「i:
+                <xmp>
+                std::vector<int> vec(5); // 创建容量为 5 个元素的 vector 容器
+                </xmp>
+            」］
+
+            ③创建确定容量和元素初值的 vector 容器：［i:两个参数的构造函数，第一个参数接收容量，第二个参数接收元素初始值；「i:例如」］［b:「i:
+                <xmp>
+                std::vector<int> vec(5, 1); // 创建容量为 5 个元素的 vector 容器，每个元素的初始值为 1
+                </xmp>
+            」］
+
+            ④从其他线性容器创建：［i:两个参数的构造函数，这两个参数都接收目标线性容器的迭代器，第一个参数将做为新创建 vector 容器的首元素，第二个参数接收的迭代器对应的元素的前一个元素将做为新创建的 vector 容器的尾元素；「i:例如」］［b:「i:
+                <xmp>
+                std::vector<int> vec1{1, 2, 3, 4, 5}; 
+                std::vector<int> vec2(vec1.begin() + 1, vec1.end());
+                
+                std::cout << *vec2.begin() << std::endl; // 2
+                std::cout << *(vec2.end() - 1) << std::endl; // 5
+                </xmp>
+            」］
+
+            ⑤列表初始化 (C++11)、本质：［i:使用一对大括号包裹起来的各元素的初始值进行初始化；本质调用了参数为 std::initializer_list 的构造函数，即先通过一对大括号包裹起来的各元素的初始值会先初始化一个 std::initializer_list，然后再通过它来初始化 vector 容器「i:例如」］［b:「i:
+                <xmp>
+                std::vector<int> vec1{1, 2, 3}; // 基于 std::initializer_list 的列表初始化允许省略小括号
+                std::vector<int> vec2({1, 2, 3});
+                std::vector<int> vec3 = {1, 2, 3};
+                </xmp>
+            」］
+
+            ⑥创建并从其他 vector 容器拷贝所有元素：［i:拷贝构造函数；「i:例如」］［b:「i:
+                <xmp>
+                std::vector<int> vec0{1, 2, 3};
+                std::vector<int> vec1 = vec0;
+                std::vector<int> vec2(vec0);
+                std::vector<int> vec3{vec0}; // 构造函数的小括号可以换成大括号
+                </xmp>
+            」］
+
+            ⑦创建一个 vector 容器并将某个现有的 vector 容器的各个元素转移给它：［i:移动构造函数；「i:例如」］［b:「i:
+                <xmp>
+                std::vector<int> vec0{1, 2, 3};
+
+                std::vector<int> vec1 = std::move(vec0);
+                std::vector<int> vec2(std::move(vec0));
+                std::vector<int> vec3{std::move(vec0)}; // 构造函数的小括号可以换成大括号
+
+                std::vector<int> vec4(std::vector<int>{1, 2, 3});
+                std::vector<int> vec5 = std::vector<int>(5, 1);
+                std::vector<int> vec6{std::vector<int>{1, 2, 3}}; // 构造函数的小括号可以换成大括号
+                </xmp>
+            」］
+
+        3) 元素访问：
+            ①用索引直接访问元素的方法、返回值：［i:`[]`运算符或`at()`方法；返回值为对应元素的引用；「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <vector>
+
+                int main() {
+                    std::vector<int> vec1{1, 2, 3};
+
+                    // 基本使用
+                    std::cout << vec1[1] << "\n" // 2
+                            << vec1.at(1)      // 2
+                            << std::endl;
+
+                    // 验证返回值是引用
+                    vec1[1] = 99;
+                    std::cout << vec1[1] << std::endl; // 99
+                
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ②以上方法访问越界时会怎样：［i:对于`[]`运算符，越界访问是一个未定义行为，输出结果可能是不确定的、程序也可能直接崩溃，不会导致抛出异常；对于`at()`方法，越界访问会抛出 std::out_of_range 异常；「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <vector>
+
+                int main() {
+                    std::vector<int> vec1{1, 2, 3};
+
+                    // 越界访问的行为
+                    std::cout << vec1[3] << std::endl; // 输出结果不确定或程序崩溃
+                    
+                    try {
+                        int n = vec1.at(3);
+                    }
+                    catch (const std::exception& e) {
+                        std::cout << e.what() << std::endl;
+                    }
+                
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ③直接访问首元素的方法、返回值：［i:`front()`方法、返回首元素的引用；］
+            
+            ④直接访问尾元素的方法、返回值：［i:`back()`方法、返回尾元素的引用；「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <vector>
+
+                int main() {
+                    std::vector<int> vec1{1, 2, 3};
+
+                    // 基本使用
+                    std::cout << vec1.front() << "\n" // 1
+                            << vec1.back()            // 3
+                            << std::endl;
+
+                    // 验证返回值是引用
+                    vec1.front() = 66;
+                    vec1.back() = 99;
+                    
+                    for (int i = 0; i < vec1.size(); ++i) {
+                        std::cout << vec1[i] << " ";
+                    } 
+                    std::cout << std::endl;
+                
+                    return 0;
+                }
+                // 输出结果：66 2 99
+                </xmp>
+            」］
+
+            ⑤容器为空时访问首尾元素会如何：［i:未定义行为，输出结果可能是不确定的、程序也可能直接崩溃，不会导致抛出异常；］
+            
+            ⑥以上方法直接访问常容器的注意点/为何：［i:用`[]`、`at()`、`back()`、`front()`直接访问 const 修饰的 vector 容器的元素时返回元素的常引用，因此无法通过返回的引用修改目标元素；这是因为这些方法都存在针对 const 修饰的 vector 容器的重载版本；「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <vector>
+
+                int main() {
+                    const std::vector<int> vec{4, 5, 6};
+                    
+                    // 以下语句都将编译失败
+                    vec[1] = 10;
+                    vec.at(1) = 10; 
+                    vec.front() = 66;
+                    vec.back() = 99;
+
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ⑦用迭代器随机访问任意元素：［i:用迭代器随机访问任意元素的步骤如下：<br>
+                ＞a. 先通过`begin()`或`end()`方法（或`cbegin()`或`cend()`方法）获取首尾元素随机访问迭代器（严格来说是首元素迭代器和尾元素的下一个位置的随机访问迭代器）；<br>
+                ＞b. 然后加或减一个整数来移动迭代器指向目标元素（访问首元素则不需要）；<br>
+                ＞c. 最后解引用以访问元素；<br>
+                ＞注意：`begin()/end()`与`cbegin()/cend()`的区别在于能否通过返回的随机访问迭代器来修改指向的元素，前者可以，后者不可以；「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <vector>
+
+                int main() {
+                    std::vector<int> vec1{1, 2, 3};
+
+                    std::vector<int>::iterator it = vec1.begin();
+
+                    // 访问第一个元素
+                    std::cout << *it << std::endl;
+                    
+                    // 访问第二个元素
+                    *(it + 1) = 10;
+                    std::cout << *(it + 1) << std::endl;
+
+                    // 访问第三个元素
+                    std::cout << *(it + 2) << std::endl;
+                    std::cout << *(vec1.end() - 1) << std::endl;
+                
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ⑧用迭代器访问元素越界会怎样：［i:未定义行为，输出结果是不确定的、或者程序直接崩溃，不会抛出异常；「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <vector>
+
+                int main() {
+                    std::vector<int> vec1{1, 2, 3};
+
+                    // 非空 vector 容器迭代器访问越界
+                    std::vector<int>::iterator it = vec1.begin();
+                    std::cout << *(vec1.begin() + 3) << std::endl;
+                    std::cout << *vec1.end() << std::endl;
+
+                    // 空的 vector 容器用迭代器访问首尾元素
+                    std::vector<int> vec2;
+                    std::cout << *vec2.begin() << std::endl;
+                    std::cout << *vec2.end() << std::endl;
+                
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ⑨用迭代器访问常容器元素注意点：［i:`begin()`和`end()`返回的一个常量随机访问迭代器（const_iterator），即等同于`cbegin()`和`cend()`方法，不可以用它来修改指向的元素；「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <vector>
+
+                int main() {
+                    const std::vector<int> vec1{1, 2, 3};
+
+                    std::vector<int>::iterator _it = vec1.begin(); // 编译失败，const_iterator 类型无法赋值给 iterator 类型
+                    
+                    std::vector<int>::const_iterator it = vec1.begin();
+
+                    // 尝试读取元素
+                    std::cout << *(it + 1) << std::endl; // 2
+                    // 尝试修改元素
+                    *(it + 1) = 10; // 编译失败
+                
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ⑩在不确定 vector 容器是否为空的情况下如何避免因随机访问迭代器无效导致的未定义行为：［i:判断`end()`和`begin()`的返回值是否相等，相等则表示 vector 容器为空，通过这两个方法获取的随机访问迭代器都是无效的；「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <vector>
+                #include <cstdlib>
+                #include <ctime>
+
+                int main() {
+                    std::srand(std::time(nullptr));
+                    
+                    std::vector<int> vec;
+
+                    int r = rand() % 100 + 1;
+                    if (r > 50) {
+                        vec.push_back(1);
+                    }
+
+                    if (vec.begin() != vec.end()) {
+                        std::cout << vec.back() << std::endl;
+                    }
+                
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ⑪用迭代器访问非 const 修饰的 vector 容器时如何防止元素被意外修改：［i:有两种方法：<br>
+                ＞a. 将`begin()`或`end()`的返回值赋值给 const_iterator 类型的迭代器，再访问元素；<br>
+                ＞b. 直接使用`cbegin()`或`cend()`方法获取 const_iterator 类型的随机访问迭代器，再访问元素；「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <vector>
+
+                int main() {
+                    std::vector<int> vec1{1, 2, 3};
+
+                    std::vector<int>::iterator it = vec1.begin(); 
+                    std::vector<int>::const_iterator cit1 = vec1.begin();
+                    std::vector<int>::const_iterator cit2 = vec1.cbegin();
+
+                    *(it + 1) = 10; // 修改成功
+                    std::cout << *(it + 1) << std::endl; // 读取成功, 10
+
+                    std::cout << *(cit1 + 1) << std::endl; // 读取成功, 10
+                    *(cit1 + 1) = 10; // 编译失败 
+
+                    std::cout << *(cit2 + 1) << std::endl; // 读取成功, 10
+                    *(cit2 + 1) = 10; // 编译失败 
+                
+                    return 0;
+                }
+                </xmp>
+            」］
+
+
+        4) 长度与容量：
+            ①获取 vector 容器长度/元素个数的方法：［i:`size()`方法；］
+
+            ②获取 vector 容器容量/最大长度的方法：［i:`capacity()`方法；］
+
+            ③默认构造创建的 vector 容器长度/容量：［i:0；］
+
+            ④更改容量、目标容量小于当前容量则：［i:`reserve()`方法，参数为目标容量；］
+
+            ⑤更改长度、目标超过容量时怎样：［i:`resize()`方法，参数为目标长度；若更改的长度超过了容量，则会触发内存重分配，重分配后的 vector 容器的长度和容量相等；］
+
+
+        5) 遍历：
+            ①vector 容器的各种遍历方式：［i:基于随机访问/索引的遍历、基于迭代器的遍历、基于范围的 for 循环；「i:例如」］
+            ［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <vector>
+
+                int main() {
+                    std::vector<int> vec{1, 2, 3};
+
+                    // 基于随机访问/索引的遍历 
+                    for (std::size_t i = 0; i < vec.size(); ++i) {
+                        const int& elem = vec[i];
+                        std::cout << elem << std::endl;
+                    }
+
+                    // 基于迭代器的遍历
+                    // 写全类型
+                    for (std::vector<int>::const_iterator cit = vec.cbegin(); cit != vec.cend(); ++cit) {
+                        std::cout << *cit << std::endl;    
+                    }
+                    // 使用 auto 自动类型推导
+                    for (auto cit = vec.cbegin(); cit != vec.cend(); ++cit) {
+                        std::cout << *cit << std::endl;    
+                    }
+
+                    // 基于范围的 for 循环
+                    // 值传递方式
+                    for (int elem : vec) {
+                        std::cout << elem << std::endl;
+                    }
+                    // 如果是较大的自定义类型，在不需要修改元素时通常使用常引用的形式
+                    for (const int& elem : vec) {
+                        std::cout << elem << std::endl;
+                    }
+                    // 也可以使用 auto 自动类型推导 
+                    for (const auto& elem : vec) {
+                        std::cout << elem << std::endl;
+                    }
+                
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ②使用迭代器遍历 vector 容器且用 auto 自动推导迭代器类型时如何防止元素被意外修改、能否在 auto 前加 const 修饰来实现：［i:使用`cbegin()`或`cend()`方法获取 const_iterator 类型的随机访问迭代器；不能简单地认为在 auto 前面加 const 修饰就可以避免意外修改容器元素，因为一方面加了 const 修饰迭代器就无法自增了，另一方面 const 修饰的是迭代器本身而不是元素——类似指针的顶层 const 而非底层 const，「i:例如」］
+            ［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <vector>
+
+                int main() {
+                    std::vector<int> vec{1, 2, 3};
+
+                    for (auto cit = vec.cbegin(); cit != vec.cend(); ++cit) {
+                        std::cout << *cit << std::endl;    
+                    } 
+
+                    for (const auto it = vec.begin(); it != vec.end(); ++it) { 
+                        // ++it 编译失败
+                        *it += 1;
+                        std::cout << *it << std::endl;    
+                    } 
+                
+                    return 0;
+                }
+                </xmp>
+            」］
+
+        6) 判空、清空与销毁：
+            ①判断 vector 容器是否为空：［i:`empty()`方法；］
+
+            ②长度为零容量非零是否为空：［i:为空，即空与非空针对的是元素个数而非容量；］
+
+            ③空容器调用 resize(3) 后是否为空：［i:非空，因为它会将长度/元素个数设置为 3；］
+
+            ④空容器调用 reserve(3) 后是否为空：［i:空，因为空与非空针对的是元素个数而非容量；］
+
+            ⑤清空 vector 容器的方法：［i:`clear()`方法；「i:例如」］［b:「b:
+                <xmp>
+                #include <vector>
+                #include <iostream>
+
+                int main()
+                {
+                    std::vector<int> v1;
+
+                    v1.push_back(10);
+                    v1.push_back(20);
+                    v1.push_back(30);
+
+                    std::cout << "The length of v1 is " << v1.size() << std::endl;
+                    v1.clear();
+                    std::cout << "The length of v1 after clearing is " << v1.size() << std::endl;
+
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ⑥清空影响容量么、为何这样设计：［i:不会影响容量、即仅长度归零而容量不变；这样设计是因为，若容量也归零，那么下次插入元素时必然频繁涉及内存重分配；「i:例如」］
+            ［b:「b:
+                <xmp>
+                #include <vector>
+                #include <iostream>
+
+                int main()
+                {
+                    std::vector<int> v1{10, 20, 30};
+
+                    std::cout << "The capacity of v1 is " << v1.capacity() << std::endl;
+                    v1.clear();
+                    std::cout << "The capacity of v1 after clearing is " << v1.capacity() << std::endl;
+
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ⑦销毁：［i:生命周期结束时（如作用域结束、delete 通过 new 关键字创建的 vector 容器）自动调用析构函数，释放系统为其分配的内存；］
+
+        7) 插入元素：
+            ①在末尾插入现有元素：［i:`push_back()`方法，参数为要插入的元素；］
+
+            ②以上方法在插入左值和右值时的区别：［i:`push_back()`插入左值时执行的是元素拷贝操作、调用的是左值版本的`push_back()`，插入右值时执行的是元素的移动操作、调用的是右值引用版本的`push_back()`；］
+
+            ③在末尾构造一个元素：［i:`emplace_back()`方法，参数为元素类型的构造函数的参数；「i:例如」］［b:「b:
+                <xmp>
+                #include <vector>
+                #include <iostream>
+                #include <string>
+
+                class Student {
+                private:
+                    std::string _name;
+                    char        _gender;
+                    double      _score;
+                public:
+                    // 默认构造
+                    Student() :_name(std::string("")), _gender('b'), _score(0.0) 
+                    {
+                        std::cout << "Student Default Constructor" << std::endl;
+                    }
+
+                    // 有参构造
+                    Student(const std::string& name, char gender, double score) 
+                        :_name(name), _gender(gender), _score(score)
+                    {
+                        std::cout << "Student Parametric Constructor" << std::endl;
+                    }
+
+                    // 拷贝构造和赋值 
+                    Student(const Student& other) {
+                        std::cout << "Student Copy Constructor" << std::endl;
+                        if (this != &other) {
+                            _name = other._name;
+                            _gender = other._gender;
+                            _score = other._score;
+                        }
+                    }
+
+                    Student& operator=(const Student& other) {
+                        std::cout << "Student Copy Assign" << std::endl;
+                        if (this != &other) {
+                            _name = other._name;
+                            _gender = other._gender;
+                            _score = other._score;
+                        }
+                        return *this;
+                    }
+
+                    // 移动构造和赋值 
+                    Student(Student&& other) {
+                        std::cout << "Student Move Constructor" << std::endl;
+                        if (this != &other) {
+                            _name = std::move(other._name);
+                            _gender = other._gender;
+                            _score = other._score;
+                        }
+                    }
+
+                    Student& operator=(Student&& other) {
+                        std::cout << "Student Move Assign" << std::endl;
+                        if (this != &other) {
+                            _name = std::move(other._name);
+                            _gender = other._gender;
+                            _score = other._score;
+                        }
+                        return *this;
+                    }
+
+                    // 打印学生信息
+                    friend std::ostream& operator<<(std::ostream& cout, const Student& stu) {
+                        cout << "name: " << stu._name << ", "
+                                << "gender: " << stu._gender << ", "
+                                << "score: " << stu._score;
+                        return cout;  
+                    }
+                };
+
+                int main()
+                {
+                    Student stu("Zhang San", 'b', 99.5);
+                    std::vector<Student> vec;
+                    
+                    vec.push_back(stu); 
+                    vec.push_back(Student("Li Si", 'g', 98.0)); 
+                    vec.emplace_back("Wang Wu", 'b', 98.5); 
+
+                    std::cout << vec[0] << "\n" << vec[1] << std::endl;
+
+                    return 0;
+                }
+
+                /*
+                    输出结果：
+                    Student Parametric Constructor
+                    Student Copy Constructor
+                    Student Parametric Constructor
+                    Student Move Constructor
+                    Student Copy Constructor
+                    Student Parametric Constructor
+                    Student Copy Constructor
+                    Student Copy Constructor
+                    name: Zhang San, gender: b, score: 99.5
+                    name: Li Si, gender: g, score: 98
+                */
+                /*
+                    输出结果分析：
+                    Student stu("Zhang San", 'b', 99.5) -> 有参构造
+                    vec.push_back(stu) -> stu 是左值，调用左值版本的 push_back，它执行的元素的拷贝操作，所以调用拷贝构造
+                    vec.push_back(Student("Li Si", 'g', 98.0)) ->
+                        先构造做为实参的 Student 临时对象，调用有参构造
+                        由于这个临时对象是右值，所以调用 push_back() 的右值引用版本，执行的是元素的移动操作，所以调用 Student 的移动构造 
+                        插入该元素时超过了 vec 的当前容量 1，所以进行内存的重分配，由于 Student 的移动构造和移动赋值没有 noexcept 关键字，所以原内存空间中的元素会拷贝到新的内存空间中，触发拷贝构造
+                    vec.emplace_back("Wang Wu", 'b', 98.5) -> 
+                        先构造 Student 对象，调用有参构造
+                        插入该元素时超过了 vec 的当前容量 2，所以进行内存的重分配，由于 Student 的移动构造和移动赋值没有 noexcept 关键字，所以原内存空间中的元素会拷贝到新的内存空间中，触发两次拷贝构造
+                */
+                </xmp>
+            」］
+
+            ④在任意位置构造一个元素、返回值：［i:`emplace()`方法，第一个参数为插入位置的随机访问迭代器，剩余参数为元素类型的构造函数的参数；返回新插入元素的随机访问迭代器；］
+
+            ⑤vector 容器有无直接在开头插入或构造元素的方法、为什么这样设计：［i:没有，因为在开头插入元素效率很低、需要移动所有现有元素，具体来说即从最后一个元素开始、将每个元素移动到下一个元素的位置、再在开头构造要插入的元素，算法复杂度为 O(n)；］
+    </article>
+    <script src="js/global.js"></script>
+</body>
+</html>

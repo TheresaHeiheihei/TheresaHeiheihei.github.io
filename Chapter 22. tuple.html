@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>tuple</title>
+    <!-- 0. 全局样式表 -->
+    <link rel="stylesheet" href="css/global.css">
+    <!-- 1. 引入 Highlight.js 样式表（这里使用默认主题） -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <!-- 2. 引入 Highlight.js 核心库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- 3. 按需引入 C++ 语言插件（如果使用 ES6 模块，则可以直接使用核心库的内置支持，无需单独引入） -->
+    <!--
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+    -->
+</head>
+<body>
+    <article>
+    [页眉: 22. tuple]
+        <h3>1. 基本概念</h3>
+        1) 什么是 tuple：［i:tuple 即「i:元组，是 C++11 引入的」能存储任意类型的元素的容器；］
+
+        2) tuple 的常用的应用场景：［i:实现让函数返回“多个”值；「i:即当函数需要返回的多个值时，将它们存储在一个 tuple 对象中并将此 tuple 对象返回；例如」］［b:「b:
+            <xmp>
+            // 根据圆的半径求直径、周长、面积
+            std::tuple<double, double, double> get_circle_property(double r) 
+            {
+                return std::tuple<double, double, double>(r*2, 2*3.14*r, 3.14*r*r); 
+            }
+            </xmp>
+            」
+        ］
+        
+        <h3>2. tuple 的使用</h3>
+        1) 头文件：［i:&lt;tuple&gt;］
+
+        2) tuple 对象的创建：
+            ①创建一个空的 tuple：［i:通过默认构造函数，典型语法格式如下］［b:
+                ```c++
+                std::tuple&lt;第一个元素类型, 第二个元素类型, ...&gt; t;
+                ```
+                「i:例如」「b:
+                    ```c++
+                    std::tuple&lt;int, double, std::string&gt; t;
+                    ```
+                」
+            ］
+
+            ②创建 tuple 并将现有值存到里面：［i:通过可变参数的有参构造函数，典型语法格式为］［b:
+                ```c++
+                // 可变参数的有参构造函数
+                std::tuple&lt;第一个元素类型, 第二个元素类型, ...> t(第一个元素的值, 第二个元素的值, ...);
+                ```  
+            ］
+
+            ③从现有的 tuple 对象创建：［i:规则为现有的 tuple 对象的每个模板参数类型必须与新创建的 tuple 对象的对应的模板参数类型相同，或者能隐式转换为对应的模板参数类型；可以根据实际情况调用拷贝、移动、左值版本的转换构造函数、右值版本的转换构造函数，具体来说<br>
+            ＞a. 若现有的 tuple 对象的各个模板参数类型与新建 tuple 对象的对应模板参数类型相同——<br>
+            ＞当现有的 tuple 对象为左值，且后面还要用这个现有 tuple 对象，则调用拷贝构造函数，若后面不会再用这个 tuple 对象，则调用移动构造函数；<br>
+            ＞当现有的 tuple 对象为右值，则调用移动构造构造函数；<br>
+            ＞b. 若现有的 tuple 对象的各个模板参数类型能隐式转换为新建 tuple 对象的对应模板参数类型——<br>
+            ＞当现有的 tuple 对象为左值，且后面还要用这个现有 tuple 对象，则调用左值版本的转换构造函数，若后面不会再用这个 tuple 对象，则调用右值版本的转换构造函数；<br>
+            ＞当现有的 tuple 对象为右值，则调用移动构造函数；<br>
+            ＞「i:例如」］［b:「b:
+                ```c++
+                std::tuple&lt;int, char> t0{20, 'b'};
+
+                std::tuple&lt;int, char> t1(t0);
+                std::tuple&lt;long, char> t2(std::move(t0));
+                // t0 的类型与 t1 的类型完全相同，t0 的第一个模板参数类型 int 能隐式转换为 t2 的第一个模板参数类型 long，故可以编译通过
+                // 因为 t0 和 t1 的类型相同，且 t0 是左值，所以创建 t1 时调用的是拷贝构造函数
+                // 因为 t0 和 t2 的类型不同，且 std::move(t0) 是右值，所以创建 t2 时调用的是右值版本的转换构造函数
+                ```  
+            」］
+
+            ④从 std::pair 对象创建：［i:规则为新创建的 tuple 对象的类型只能有两个模板参数，且 std::pair 对象模板参数类型必须与新创建的 tuple 的对应的模板参数相同或可以隐式转换为对应的模板参数；可以根据实际情况调用左值版本的隐式转换构造函数、右值版本的从 std::pair 到 std::tuple 的转换构造函数，具体来说<br>
+            ＞a. 若现有的 std::pair 对象为左值，且后面还要用这个 std::pair 对象，则通过左值版本的转换构造函数创建；若后面不会再用这个 std::pair 对象，则可通过右值版本的从 std::pair 到 std::tuple 的转换构造函数创建；<br>
+            ＞b. 若现有的 std::pair 对象为右值，则通过右值版本的从 std::pair 到 std::tuple 的转换构造函数创建；「i:例如」］［b:「b:
+                ```c++
+                std::pair&lt;int, char> p{20, 'b'};
+                std::tuple&lt;long, char> t(std::move(p));
+                // p 的第一个模板参数类型 int 能隐式转换为 t 的第一个模板参数类型 long，故能编译通过
+                // 因为 std::move(p) 是右值，所以创建 t 时调用的是右值版本的转换构造函数
+                ```  
+            」］
+
+            ⑤快速创建 tuple 对象的工厂函数：［i:make_tuple() 函数，它返回一个右值 tuple 对象，典型语法格式如下］［b:
+                ```c++
+                std::tuple&lt;第一个元素类型, 第二个元素类型, ...> t
+                    = std::make_tuple(第一个元素的值, 第二个元素的值, ...);
+                ```
+                因为它返回一个右值 tuple 对象，所以这调用的是移动构造函数；
+            ］
+
+            ⑥tuple 支持 initializer_list 初始化么、那么新定义的对象后面能否像列表初始化那样直接跟上（或赋值为）用大括号包裹的各元素的初始值：［i:不支持，因为 std::tuple 没有参数为 initializer_list 的构造函数；但是新定义的对象后面可以像列表初始化那样直接跟上（或赋值为）用大括号包裹的各元素的初始值，「i:例如」］［b:「b:
+                ```c++
+                std::tuple&lt;int, double, char> t1{1, 1.23, 'a'};
+                std::tuple&lt;int, double, char> t2 = {1, 1.23, 'a'};
+                ```
+                这是因为在 C++11 之后调用普通的有参构造函数也可以使用花括号，但是不能有参数为 initializer_list 类型的构造函数，否则这种写法会优先使用 initializer_list 列表初始化；
+            」］
+
+
+            ⑦定义 tuple 对象时何时模板参数不可省略、何时可省略、能否省略部分模板实参：［i:在 C++14 之前，由于编译器不支持类模板的模板类型推导，所以不能省略模板实参，除非使用 auto 自动类型推导和 make_tuple() 工厂函数，例如］［b:
+                ```c++
+                auto t = std::make_tuple(1, 'a');
+                ```
+                ＞在 C++17 及其之后，编译器支持类模板的模板类型推导，所以一般可以省略模板实参，除非——<br>
+                ＞a. 你不想直接使用某个元素的初始值的类型，例如
+                ```c++
+                std::tuple&lt;double, char> t{1.2f, 'a'};
+                // 如果省略模板实参，则第一个元素会根据初始值 1.2f 的类型 float 推导为 float 类型
+                ```
+                ＞b. 花括号嵌套初始化，例如
+                ```c++
+                std::tuple t1{{1, 2, 3}};
+                std::tuple t2{{1, 2, 3}, 4};
+                /* 
+                 * 编译失败
+                 * 因为 std::tuple 不支持 initializer_list 列表初始化，所以这相当于 
+                 * std::tuple t1({1, 2, 3})
+                 * std::tuple t2({1, 2, 3}, 4)
+                 * 而 {1, 2, 3} 又可以初始化多种不同容器或聚合类型，编译器无法隐式推导其类型
+                 */
+                ```
+                ＞不可以部分省略模板实参，例如
+                ```c++
+                std::tuple&lt;int> t(3, 'a'); // 编译失败
+                ```
+            ］
+
+        3) tuple 相关操作：
+            ①根据索引获取元素：［i:通过`std::get&lt;索引>(tup)`方法，它是 &lt;tuple> 库提供的一个函数，「i:例如」］［b:
+                ```c++
+                std::tuple tup{1, false, "abc"};
+                std::string str = std::get&lt;2>(tup);
+                ```
+            ］
+
+            ②获取元素个数：［i:通过`std::tuple_size&lt;T>::value`获取，T 为要获取元素个数的 tuple 对象的类型，「i:例如」］［b:
+                ```c++
+                std::tuple tup{1, false, "abc"};
+                std::cout &lt;&lt; std::tuple_size&lt;decltype(tup)>::value &lt;&lt; std::endl;
+                ```
+            ］
+
+            ③获取指定索引元素的类型：［i:通过`std::tuple_element&lt;index, T>::type`获取，T 为要获取某元素类型的 tuple 对象的类型，「i:例如」］［b:
+                ```c++
+                std::tuple tup{1, false, "abc"};
+                std::tuple_element&lt;2, decltype(tup)>::type str = "123";
+                ```
+            ］
+
+            ④解构赋值：［i:在通过`std::tie()`方法（C++11）、参数为接收 tuple 各元素值的变量；也可以直接使用 C++17 的解构赋值语法，「i:例如」］［b:
+                ```c++
+                std::tuple tup{1, false, "abc"};
+                int n1, n2; bool b1, b2; std::string str1, str2;
+                
+                // C++11
+                std::tie(n1, b1, str1) = tup;
+                
+                // C++17
+                auto [n2, b2, str2] = tup;
+
+                std::cout &lt;&lt; n1 &lt;&lt; " " 
+                    &lt;&lt; std::boolalpha &lt;&lt; b1 &lt;&lt; " "
+                    &lt;&lt; str1 
+                    &lt;&lt; std::endl;
+                std::cout &lt;&lt; n2 &lt;&lt; " " 
+                    &lt;&lt; std::boolalpha &lt;&lt; b2 &lt;&lt; " "
+                    &lt;&lt; str2 
+                    &lt;&lt; std::endl;
+                ```
+            ］
+
+            ⑤交换两个 tuple 的元素：［i:通过`std::swap(tup1, tup2)`函数或`tup.swap(other_tup)`方法实现，注意两个 tuple 对象的类型必须完全相同，「i:例如」］［b:
+                ```c++
+                std::tuple tup1{1, false, "abc"};
+                std::tuple tup2{2, true, "123"};
+                std::swap(tup1, tup2);
+
+                int n; bool b; std::string str;
+                std::tie(n, b, str) = tup1;
+                std::cout &lt;&lt; n &lt;&lt; " " 
+                    &lt;&lt; std::boolalpha &lt;&lt; b &lt;&lt; " "
+                    &lt;&lt; str 
+                    &lt;&lt; std::endl; 
+                std::tie(n, b, str) = tup2;
+                std::cout &lt;&lt; n &lt;&lt; " " 
+                    &lt;&lt; std::boolalpha &lt;&lt; b &lt;&lt; " "
+                    &lt;&lt; str 
+                    &lt;&lt; std::endl; 
+                ```
+            ］
+
+            ⑥逐个元素做比较：［i:通过重载的比较运算符 &lt; &gt; &lt;= &gt;= == !=，注意两个 tuple 对象的类型必须完全相同且各元素也支持对应的比较运算符，从左到右逐个元素进行比较直到比较出大小，「i:例如」］［b:
+                <xmp>
+                std::tuple tup1{1, true, "12a", 0.12};
+                std::tuple tup2{1, true, "12b", 1.23};
+                
+                std::cout << std::boolalpha << (tup1 <= tup2) << std::endl;
+                // tup1 和 tup2 的前两个元素以及第三个元素的前两个字符都相等，但是第三个字符 'a' <= 'b'，所以 tup1 <= tup2 成立
+                </xmp>
+            ］
+
+            ⑦拼接：［i:通过`std::tuple_cat(tup1, tup2, ...)`方法，「i:例如」］［b:「b:
+                <xmp>
+                std::tuple tup1{1, false, "abc"};
+                std::tuple tup2{2, true, "123"};
+                std::tuple tup3{3, true, "456"};
+
+                std::tuple tup = std::tuple_cat(tup1, tup2, tup3);
+                
+                auto [n1, b1, str1, n2, b2, str2, n3, b3, str3] = tup;
+                std::cout << n1 << " " 
+                    << std::boolalpha << b1 << " "
+                    << str1 
+                    << '\n'
+                    << n2 << " " 
+                    << std::boolalpha << b2 << " "
+                    << str2 
+                    << '\n'
+                    << n3 << " " 
+                    << std::boolalpha << b3 << " "
+                    << str3
+                    << std::endl;
+                </xmp>
+            」］
+
+            ⑧将元素的初始值完美转发给元素：［i:通过］［b:
+                ```c++
+                std::forward_as_tuple(第一个元素的值, 第二个元素的值, ...)
+                ```
+                函数实现，它返回一个右值 tuple 对象，「i:例如」
+                ```c++
+                int n = 1;
+
+                std::tuple tup = std::forward_as_tuple(&lt;n, true, "hello");
+                static_assert(std::is_same&lt;
+                    decltype(tup),
+                    std::tuple&lt;int&, bool&&, const char(&)[6]>
+                >::value);
+                ```
+            ］
+
+        4) std::tie() 函数（C++11）：
+            ①std::tie() 的本质：［i:std::tie() 能将变量的左值引用包装到一个 std::tuple 元组中；］
+        
+            ②std::tie() 的应用：［i:当需要对多个值（如多个同类型或不同类型的变量、数组/结构体/容器/元组等类型的每个元素或成员）都执行赋值或比较运算时，std::tie 能简化代码；<br>
+            ＞a. 最典型的例子就是快速从元组中提取各个元素的值，即元组的解构赋值，本质是对每个元组元素都执行的赋值操作的代码简化；<br>
+            ＞b. 需要注意的是对每个元素/成员做相同的比较运算时，简化后使用的比较运算符是 std::tuple 重载的比较运算符，它的规则为逐元组元素比较直到比较出结果，可能与原来的比较结果并不一致；「i:例如」］［b:「b:
+                <xmp>
+                int a = 1;
+                int b = 2;
+
+                // 交换 a 和 b 的值最原始的方式
+                int tmp1 = a;
+                a = b;
+                b = tmp1;
+
+                // 使用 std::tie() 对以上代码进行简化
+                int tmp2;
+                std::tie(tmp2, a, b) = std::tie(a, b, tmp2);
+
+                // 当然这只是演示 std::tie() 的用法，实际开发中交换两个对象的值可以直接使用 std::swap()，即
+                std::swap(a, b);
+                </xmp>
+                <xmp>
+                // 演示解构赋值
+                std::tuple tup{1, 1.23, 'a', "hello"};
+                int n; double d; char c; std::string str;
+
+                /*
+                 * n = std::get<0>(tup);
+                 * d = std::get<1>(tup);
+                 * c = std::get<2>(tup);
+                 * str = std::get<3>(tup);
+                 * 由于对元组的每个元素都执行了赋值操作，所以可以简化为（伪代码）
+                 * std::tie(n, d, c, str) = std::tie(std::get<0>(tup), std::get<1>(tup), std::get<2>(tup), std::get<3>(tup));
+                 * 等号右边其实就是 tup，所以可以直接写成——
+                 */
+                std::tie(n, d, c, str) = tup;
+                </xmp>
+                <xmp>
+                // 解构其他类型如结构体
+                #include <iostream>
+
+                struct Demo {
+                    int _n;
+                    double _f;
+                    char _c;
+                    std::string _str;
+                };
+
+                int main(int argc, char** argv) {
+                    Demo obj = {1, 1.23, 'a', "hello"};
+                    int n; double f; char c; std::string str;
+
+                    /*
+                    * n = obj._n;
+                    * f = obj._f;
+                    * c = obj._c;
+                    * str = obj._str;
+                    * 由于对结构体的每个成员都执行了赋值操作，所以可以简化为
+                    */
+                    std::tie(n, f, c, str) = std::tie(obj._n, obj._f, obj._c, obj._str);
+                    
+                    std::cout << n << " " << f << " " << c << " " << str << std::endl;
+
+                    return 0;
+                }
+                </xmp>
+                <xmp>
+                // 简化对每个元素的比较操作、但是比较逻辑可能不同
+                #include <iostream>
+                #include <set>
+                
+                class ElemType1 {
+                private:
+                    int _n;
+                    double _d;
+                    char _c;
+                    std::string _str;
+                public:
+                    ElemType1(int n, double d, char c, std::string str)
+                        :_n(n), _d(d), _c(c), _str(str)
+                    {}
+                    
+                    bool operator<(const ElemType1& other) const {
+                        return _n < other._n && 
+                               _d < other._d &&
+                               _c < other._c &&
+                             _str < other._str;
+                    }
+                };
+
+                class ElemType2 {
+                private:
+                    int _n;
+                    double _d;
+                    char _c;
+                    std::string _str;
+                public:
+                    ElemType2(int n, double d, char c, std::string str)
+                        :_n(n), _d(d), _c(c), _str(str)
+                    {}
+                    
+                    bool operator<(const ElemType2& other) const {
+                        return std::tie(_n, _d, _c, _str) < std::tie(other._n, other._d, other._c, other._str);
+                    }
+                };
+                
+                int main(int argc, char** argv) {
+                    std::set<ElemType1> s1;
+                    std::set<ElemType2> s2;
+  
+                    ElemType1 e11(1, 1.23, 'a', "abc");
+                    ElemType1 e12(2, 2.23, 'b', "def");
+                    ElemType1 e13(2, 4.23, 'd', "jkl");
+                    ElemType1 e14(2, 2.23, 'b', "def");
+
+                    ElemType2 e21(1, 1.23, 'a', "abc");
+                    ElemType2 e22(2, 2.23, 'b', "def");
+                    ElemType2 e23(2, 4.23, 'd', "jkl");
+                    ElemType2 e24(2, 2.23, 'b', "def");
+
+                    std::set<ElemType1>::iterator it1;
+                    std::set<ElemType2>::iterator it2;
+                    bool inserted1, inserted2;
+
+                    std::tie(it1, inserted1) = s1.insert(e12);
+                    if (!inserted1) {
+                        std::cerr << "insert e12 failed!" << std::endl;
+                    }
+
+                    std::tie(it1, inserted1) = s1.insert(e11);
+                    if (!inserted1) {
+                        std::cerr << "insert e11 failed!" << std::endl;
+                    }
+
+                    std::tie(it1, inserted1) = s1.insert(e13);
+                    if (!inserted1) {
+                        std::cerr << "insert e13 failed!" << std::endl;
+                    }
+
+                    std::tie(it1, inserted1) = s1.insert(e14);
+                    if (!inserted1) {
+                        std::cerr << "insert e14 failed!" << std::endl;
+                    }
+
+                    std::tie(it2, inserted2) = s2.insert(e22);
+                    if (!inserted2) {
+                        std::cerr << "insert e22 failed!" << std::endl;
+                    }
+
+                    std::tie(it2, inserted2) = s2.insert(e21);
+                    if (!inserted2) {
+                        std::cerr << "insert e21 failed!" << std::endl;
+                    }
+
+                    std::tie(it2, inserted2) = s2.insert(e23);
+                    if (!inserted2) {
+                        std::cerr << "insert e23 failed!" << std::endl;
+                    }
+
+                    std::tie(it2, inserted2) = s2.insert(e24);
+                    if (!inserted2) {
+                        std::cerr << "insert e24 failed!" << std::endl;
+                    }
+                    
+                    return 0;
+                }
+                /*
+                    输出结果为：
+                    insert e13 failed!
+                    insert e14 failed!
+                    insert e24 failed!
+                */
+                </xmp>
+                最后一个案例之所以会输出那样的结果，是因为逐成员做小于比较并用“&&”连接时的规则与直接比较两个 tuple 元组的规则并不一样，前者要求左操作数的每个成员都必须小于右操作的对应的每个成员，而后者则是逐成员比较直到能比较出结果，前者应用到 std::set 中表示升序排序且规则为前一个集合元素的各个成员都必须小于后一个集合元素的对应成员，后者应用到 std::set 中表示升序排序且规则为前一个集合元素的的前 N 成员可以与后一个集合元素的前 N 个成员的值相等，但是前一个集合元素的第 N+1 个成员必须小于后一个集合元素的第 N+1 个成员，因此：<br>
+                ＞a. 在向 s1 中插入 e13 和 e14 时，由于它们存在与其他元素值相同的成员，不满足每个成员都不能等于其他元素的每个成员的要求；<br>
+                ＞b. 在向 s2 中插入 e24 时，由于它的成员的值与 e22 完全一致，无法比较出大小，所以插入失败；
+            」］
+            
+            ③std::tie() 解构赋值语法：［i:std::tie() 解构赋值的语法为］［b:
+                <xmp>
+                std::tie(变量1, 变量2, ...) = 元组对象;
+                // 变量1, 变量2, ... 分别用于接收元组对象中第一个元素、第二个元素的值 
+                </xmp>
+                「i:例如」「b:
+                <xmp>
+                int n; double d;
+                std::tie(n, d) = std::make_tuple(1, 1.23);
+                // n 的值为 1，d 的值为 1.23
+                </xmp>
+            」］
+
+            ④std::tie() 解构赋值语法的原理：［i:std::tie() 实现解构赋值语法的原理如下<br>
+                ＞a. std::tie() 首先创建一个由指定变量的左值引用组成的 std::tuple 元组对象；<br>
+                ＞b. 赋值操作会触发 std::tuple 重载的赋值运算符，在`operator=()`内部会将等号右边元组对象的各个元素的值复制给等号左边元组对象的各个元素，由于等号左边元组对象的各个元素都是左值引用，它们都是对应变量的别名，所以就相当于直接将右边元组对象各个元素的值直接复制给对应的变量；「i:例如」］［b:「b:
+                <xmp>
+                int n; double d;
+                std::tie(n, d) = std::make_tuple(1, 1.23);
+                /*
+                 * a. std::tie() 会创建一个元素为 n 和 d 的左值引用的 std::tuple 元组对象
+                 * b. 赋值操作会触发 std::tuple 重载的赋值运算符，在 operator=() 内部会将等号右边第一、第二个元素的值 1、1.23 赋值给等号左边的元组对象的对应元素，即变量 n 和 d 的左值引用 
+                 * c. 这相当于直接把 1 和 1.23 分别赋值给变量 n 和 d
+                 */
+                </xmp>
+            」］
+
+            ⑤std::tie() 能否解构 std::pair 元组：［i:可以，因为 std::tuple 支持从 std::pair 的转换赋值，具体来说，解构赋值的赋值从操作会触发 std::tuple 重载的赋值运算符，而`operator=()`存在参数为 std::pair 的重载版本；］
+
+            ⑥std::ignore 及其使用：［i:是一个占位符，表示不提取/忽略对应位置的元素的值；「i:例如」］［b:「b:
+                <xmp>
+                int n = 0; double d = 0.0; std::string str = "abc123";
+
+                std::tie(n, std::ignore, str) = std::make_tuple(1, 1.23, "hello");
+                std::cout << n << " " << d << " " << str << std::endl;
+                // 结果为 1, 0, "hello"，说明没有提取浮点数 1.23
+                </xmp>
+            」］
+    </article>
+    <script src="js/global.js"></script>
+</body>

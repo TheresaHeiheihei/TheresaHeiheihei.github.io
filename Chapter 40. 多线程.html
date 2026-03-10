@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多线程</title>
+    <!-- 0. 全局样式表 -->
+    <link rel="stylesheet" href="css/global.css">
+    <!-- 1. 引入 Highlight.js 样式表（这里使用默认主题） -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <!-- 2. 引入 Highlight.js 核心库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- 3. 按需引入 C++ 语言插件（如果使用 ES6 模块，则可以直接使用核心库的内置支持，无需单独引入） -->
+    <!--
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+    -->
+</head>
+<body>
+    <article>
+    [页眉: 40. 多线程]
+        <h3>1. 基本概念</h3>
+        1) 并发与并行、进程与线程：
+            ①并发与并行：［i:并行是指两个或多个过程同时进行；并发是指两个或多个任务仅在宏观上看上去是同时进行，但实际上是通过微观上的交替进行实现的这一效果；「i:例如 PC 上一般需要同时运行多个程序，但要运行的程序数量一般远大于 CPU 的核心数，因此无法真正实现让它们同时运行；但我们可以让每个 CPU 核心就先执行任务 A 很短一段时间，再执行任务 B 很短一段时间，再执行任务 C 很短一段时间……执行完这一轮之后紧接着再开始下一次轮转，只要控制轮转速率足够快，用户就无法察觉，也就实现了宏观上多个程序同时运行的效果；这就是并发；」］
+
+            ②程序与进程：［i:程序是指外部存储设备（如磁盘、U 盘）上的一个可执行文件；进程是指运行中的程序，是操作系统进行资源分配的基本单位；「i:资源分配是指分配内存、外设（句柄）、文件（描述符）等资源；例如，每当打开一个可执行文件启动一个进程，系统就会为之分配内存资源、使得内存占用增加、空闲内存减少；基本单位是指进程（而不是其他什么对象）才是操作系统进行资源分配的对象，且是最小粒度的资源分配对象；例如若进程启动一个线程，操作系统不会为它新分配内存资源，而是将进程的内存地址空间的一部分用作该线程的栈空间（用于保存线程的局部变量等内容）；」］
+
+            ③线程：［i:线程是指进程的执行绪，是系统调度的基本单位；其中<br>
+                ＞a. 执行绪：执行绪即执行路线，一个进程可以不止有一个执行路线，它们相互并发执行、共享所属进程持有的资源；「i:例如若把某次短跑比赛看成一个进程，则在比赛期间每个跑道上的运动员就是一个个的线程，它们齐头并进，共同使用比赛划定的整段跑道；」<br>
+                ＞b. 系统调度的基本单位：系统调度是指操作系统对某一操作对象的的启动、管理和终止；基本单位说明线程（而不是其他什么对象）才是操作系统调度的对象，且是最小粒度的调度对象；「i:例如若线程会启动两个协程（可重入的特殊函数、可以随时挂起和恢复执行，可以在一个线程内与其他协程并发执行），则操作系统不会单独调度某个协程，而是只调度这个线程，协程的启动、控制和终止完全由线程自己负责；」
+            ］
+
+            ④主线程：［i:main() 函数对应的线程，主线程的启动标志着进程的启动，主线程的终止「i:（如 main() 函数返回、::exit() 函数调用、遇到未被处理的异常触发 std::terminate() 等）」标志着进程的终止；］
+
+            ⑤进程与程序的区别和联系：［i:进程与程序的区别和联系如下<br>
+                ＞a. 联系：程序运行起来后就会创建相应的进程；<br>
+                ＞b. 区别 1：程序本质是外存上的一个可执行文件，是一个静态概念、没有生命周期；进程是内存中的一个实体，是一个动态概念、存在一定的生命周期、它随着创建而开始、随着主线程终止而结束；<br>
+                ＞c. 区别 2：操作系统会为进程分配资源，但不会为程序分配资源，后者虽然占用一定的外存空间但这不是由操作系统系统分配的；<br>
+                ＞d. 区别 3：一个程序可以创建多个进程，它们可以是多次运行该程序创建的「i:（如多次双击运行浏览器打开多个浏览器窗口）」，也可以是由最初的进程创建的「i:（如在浏览器窗口中打开多个标签页，现代浏览器一般一个标签页对应一个进程）」；
+            ］
+
+            ⑥进程与线程的关系：［i:进程 = 资源 + 线程，进程为线程提供运行环境、让它们共享系统分配给进程的资源，线程赋予了进程动态（生命周期）属性、他们相互协作让进程持续向前推进；「i:例如如果把进程比作一个公司，那么公司的地皮和大楼就是进程的资源，公司的老板和每个员工都是进程的一个线程，前者为后者提供生产环境，后者赋予公司一个动态属性，老板和员工相互协作让公司蒸蒸日上，两者缺一不可，没有地皮和大楼就无法生产商品，老板跑路员工辞职公司也就会破产；」］
+        
+
+        2) 线程的各种状态与含义：［i:线程的各种状态及其含义如下：<br>
+            ＞a.创建态：线程对象被创建但是尚未执行的状态；<br>
+            ＞b.运行态：线程正常执行计算任务时的状态；<br>
+            ＞c.终止态：线程正常执行结束或出现错误而异常终止后的状态；<br>
+            ＞d.就绪态：线程已经具备了一切运行条件，只要被系统调度就能进入运行状态；<br>
+            ＞e.阻塞态：线程因为不具备运行条件而被暂停运行，运行条件恢复后会先进入就绪态；
+        ］
+
+
+        3) 数据竞争与线程同步：
+            <!--①数据的强一致性与弱一致性：［i:数据的强一致性是指系统在任意时刻必须向所有观察者展示相同的数据视图，这意味着一旦某个数据项完成了更新、则任意观察者对该数据项的读取操作都将返回新值；数据的弱一致性是指系统不需要任意时刻都必须向所有观察者展示相同的数据视图，这意味着一旦某个数据项完成了更新、则某些观察者对该数据项的读取操作可能返回旧值；］
+
+            ②数据的线性一致性：［i:线性一致性要求在强一致性的基础上还必须满足操作顺序必须与实际发生的顺序相同，这意味着如果操作 A 先于操作 B 发生、则所有观察者必须先看到操作 A 的结果，再看到操作 B 的结果；］
+
+            ③数据的序列一致性：［i:序列一致性要求在强一致性的基础上还必须满足所有操作必须在一个全局顺序中；］
+
+            ④-->①数据竞争：［i:数据竞争是指并发读写某个共享数据项出现的数据不一致的问题；「i:例如存在一个全局变量 g_n 以及两个线程 A 和 B，线程 A 和 B 都会对 g_n 进行 1000 次自增操作并希望最终结果为 2000；假设某平台上自增操作由以下三个指令构成」］［b:「b:
+                ```c++
+                mov rax, [shared_var] # 将内存中保存的原变量的值转存到寄存器 rax
+                inc rax               # 将寄存器 rax 的值加 1
+                mov [shared_var], rax # 将寄存器 rax 保存的结果写回内存中的原变量
+                ```
+            如果在某段时间内线程 A 对 g_n 自增操作和线程 B 对 g_n 的自增操作的指令顺序为：
+                ```c++
+                (A)mov rax, [shared_var]
+                (A)inc rax
+                (B)mov rax, [shared_var]
+                (B)inc rax
+                (A)mov [shared_var], rax
+                (B)mov [shared_var], rax
+                ```
+            即线程 B 的读取操作覆盖掉了寄存器 rax 中线程 A 加 1 的结果，这会导致两次自增操作仅将 g_n 加了 1，导致最后的结果小于 2000，即理论结果与实际结果不一致；」］
+
+            ②线程同步：［i:线程同步是指让多个线程并发访问某个共享数据时必须遵循一定的次序，以避免数据竞争；「i:例如对于上一问题中线程 A 和 B 都要对 g_n 做 1000 次自增的例子，为了避免数据竞争到最最后的结果可能小于 2000，可以让线程 A 和线程 B 对 g_n 的操作次序固定为线程 A、线程 B、线程 A、线程 B（轮转 1000 次）；当然也可以先让线程 A 对 g_n 做 1000 次自增、再让线程 B 对 g_n 做 1000 次自增；这个次序也可以是随机的，只要线程 A 在对 g_n 做自增操作期间线程 B 等待、线程 B 在对 g_n 做自增操作期间线程 A 等待即可……这些方法都能避免数据竞争；」］
+
+            ③C++11 常用的几种线程同步技术：［i:互斥量、条件变量、原子操作、promise/future、async/future 等等；］
+
+        4) C++11 标准线程库的本质：
+            ①C++11 之前多线程编程方式与问题：［i:C++11 之前多线程编程的实现方式为直接使用操作系统多线程 API 或第三方跨平台线程库；但问题在于，不同操作系统或第三方库的多线程 API 的语义都是相同的，而它们的格式全然不同「i:（例如 Windows 系统中使用 CreateThread() 创建线程，而 linux 采用的 POSIX 标准又会使用 pthread_create() 创建线程）」，从而给跨平台应用程序的开发和移植带来了不小的麻烦；］
+
+            ②C++11 ：［i:将操作系统多线程 API 封装为统一的接口、以屏蔽不同操作系统的差异性，让开发者不需要再与操作系统的多线程 API 打交道从而陷入 API 使用的细枝末节；］
+
+        <h3>2. 线程的基本操作</h3>
+        1) 基本概念：
+            ①C++11 线程库：［i:&lt;thread&gt;］
+            
+            ②线程函数/程序：［i:线程创建后执行的程序；］
+
+            ③线程的 join：［i:线程的 join 是指让父线程等待子线程会合；这里的“会合”本质是让父线程在子线程执行结束时回收子线程的资源，因此<br>
+                ＞a. 如果父线程先到达汇合点，但子线程还未执行结束，则父线程只能等待子线程执行结束并回收其资源；<br>
+                ＞b. 如果子线程先执行结束，父线程还未达到汇合点，则父线程在到达汇合点之后会直接回收其资源而不必阻塞等待；<!--「i:例如父亲接儿子放学，父子约定在校门口旁边的指定位置会合，在这个场景中，父亲的最终目标是接上儿子（当然后面可能继续做其他事情），儿子则只需要到达约定位置；如果父亲先到达此位置而儿子还未放学，父亲就会一直等待直到儿子放学后来到这个位置；如果儿子放学后先来到这个位置但是父亲因为某些事情耽搁了还未到达，那么父亲到达后会立即接走儿子；」--><br>
+                ＞c. 子线程总是先于父线程执行结束，并由父线程完成资源回收工作；
+            ］［b:
+                <xmp>
+                情形一：父快子慢
+                           join       阻塞      解除阻塞   
+                父线程 ------|·····················|-------->
+                子线程 ----------------------------|
+                                                结束
+                
+                情形二：父慢子快
+                                                join   
+                父线程 ----------------------------|--------->
+                子线程 ------|
+                           结束
+                </xmp>
+            ］
+
+            ④什么是线程的 detach：［i:将子线程分离为独立线程，脱离父线程的控制，由主线程完成资源回收工作；「i:这意味着如果父线程先于子线程执行结束，子线程也会按照自己的节奏继续执行，执行结束后由主线程回收其资源；如果子线程先于父线程执行结束，父线程也不会回收其资源而且也不会受到任何影响；」］
+
+        2) 创建线程：
+            ①如何创建线程、典型语法格式：［i:通过 std::thread 的构造函数创建线程，典型语法格式为
+                <xmp>
+                std::thread thrd(可调用对象, 传递给可调用对象的实参);
+                // 可调用对象可以是普通函数、函数对象(仿函数)、lambda 表达式、类的非静态成员函数、类的静态成员函数、std::functional 对象等一切可调用对象
+                </xmp>「i:例如」］［b:「b:
+                    <xmp>
+                    #include <iostream>
+                    #include <thread>
+
+                    void thrd_func(int& n) noexcept {
+                        for (int i = 0; i < 10000; ++i) {
+                            ++n;
+                        }
+                    }
+
+                    class Adder {
+                    public:
+                        void operator()(int& n) const noexcept {
+                            for (int i = 0; i < 10000; ++i) {
+                                ++n;
+                            }
+                        }
+                    };
+
+                    int main(int argc, char** argv) {
+                        int n1 = 0, n2 = 0, n3 = 0, n4 = 0;
+
+                        // 普通函数做为线程函数
+                        std::thread thrd1(thrd_func, std::ref(n1));
+
+                        // 仿函数做为线程函数
+                        std::thread thrd2(Adder(), std::ref(n2));
+
+                        // lambda 表达式做为线程函数
+                        std::thread thrd3([&n3]() { 
+                            for (int i = 0; i < 10000; ++i) {
+                                ++n3;
+                            }
+                        }); 
+                        std::thread thrd3([](int& n) { 
+                            for (int i = 0; i < 10000; ++i) {
+                                ++n;
+                            }
+                        }, std::ref(n4)); 
+
+                        thrd1.join();
+                        thrd2.join();
+                        thrd3.join();
+
+                        std::cout << n1 << n2 << n3 << n4 << std::endl;
+
+                        return 0;
+                    }
+                    </xmp>
+                」
+            ］
+
+            ②可调用对象可以是哪些形式：［i:可调用对象可以是普通函数、仿函数(函数对象)、非静态成员函数、静态成员函数、lambda 表达式、std::functional 对象等一切可调用对象；］
+
+            ③线程函数传参的过程：［i:线程函数传参的过程可以概括为传递给 std::thread 构造函数的实参会先拷贝或移动到线程对象的内部存储中，然后再以完美转发的方式传递给线程函数的对应参数（可能发生拷贝、移动、引用绑定、类型转换）；<br>
+                ＞具体来说<br>
+                ＞a. 对于左值实参，它们会先被拷贝到 std::thread 线程对象的内部存储中，然后<br>
+                ＞第一，对于同类型的非引用型形参以值传递的方式传递给它（仍然是拷贝操作）；<br>
+                ＞第二，对于同类型的引用型形参（左值/常左值/通用引用）则发生引用绑定（注意并非绑定到原来的实参而是绑定到线程对象的内部存储）；<br>
+                ＞第三，对于不同类型的非引用型形参：若它是基本类型、则先发生隐式类型转换（编译时）再以值传递的方式传递给它（仍然是拷贝操作）；若它是自定义类型、则先调用相应的转换构造函数（运行时）创建一个临时对象、再以值传递的方式传递给它（支持移动则移动、不支持则拷贝），当然若启用了编译器优化，则往往在函数作用域中直接调用相应的转换构造函数构造形参；<br>
+                ＞第四，对于不同类型的引用型形参（只可能是常引用）：若它是基本类型、则先发生隐式类型转换（编译时）再进行引用绑定；若它是自定义类型、则先调用相应的转换构造函数（运行时）创建一个临时对象、再发生引用绑定；<br>
+                ＞b. 对于支持移动语义的右值实参，它们会先移动到 std::thread 线程对象的内部存储中，然后<br>
+                ＞第一，对于同类型非引用型参数以值传递的方式传递给它（仍然是移动操作）；<br>
+                ＞第二，对于同类型的引用型参数（常左值引用/右值引用/常右值引用/通用引用）则发生引用绑定（注意并非绑定到原来的实参而是绑定到线程对象的内部存储）；<br>
+                ＞第三，对于不同类型的非引用型参数：若它是基本类型、则先发生隐式类型转换（编译时）再以值传递的方式传递给它（仍然是移动操作）；若它是自定义类型、则先调用相应的转换构造函数（运行时）创建一个临时对象、再以值传递的方式传递给它（支持移动则移动、不支持则拷贝），当然若启用了编译器优化，则往往在函数作用域中直接调用相应的转换构造函数构造形参；<br>
+                ＞第四，对于不同类型的引用型形参（常左值引用/右值引用/常右值引用）：若它是基本类型、则先发生隐式类型转换（编译时）再进行引用绑定；若它是自定义类型、则先调用相应的转换构造函数（运行时）创建一个临时对象、再发生引用绑定；<br>
+                ＞c. 对于不支持移动语义的右值实参，会先被拷贝到线程对象的内部存储中，然后：<br>
+                ＞第一，对于同类型非引用型参数以值传递的方式传递给它（仍然是拷贝操作）；需要注意的是，如果通过在移动构造和移动赋值函数签名后面添加`= delete`来删除移动语义，则编译失败，因为删除移动语义并不像只指定拷贝构造/赋值而不指定移动构造/赋值那样让编译器不生成移动构造/赋值、也不会参与重载决议，事实上，编译器仍然会生成移动构造/赋值并且参与重载决议，只是重载决议的结果如果是移动构造/赋值，则编译失败！<br>
+                ＞第二，对于同类型的引用型参数（常左值引用/右值引用/常右值引用/通用引用）则发生引用绑定（注意并非绑定到原来的实参而是绑定到线程对象的内部存储）；<br>
+                ＞第三，对于不同类型的非引用型参数：先调用相应的转换构造函数（运行时）创建一个临时对象、再以值传递的方式传递给它（支持移动则移动、不支持则拷贝），当然若启用了编译器优化，或采用 C++17 及以上标准编译，则会在函数作用域中直接调用相应的转换构造函数构造形参；<br>
+                ＞第四，对于不同类型的引用型形参（常左值引用/右值引用/常右值引用）：先调用相应的转换构造函数（运行时）创建一个临时对象、再发生引用绑定；<!--  
+                ＞a. 传递给 std::thread 构造函数的从第二个实参开始的实参会先拷贝或移动到线程对象的内部存储中，当然只有实参是右值且该类型支持移动语义时才会进行移动；<br>
+                ＞b. 然后再将线程对象内部存储中保存的各个实参的备份传递给线程函数的对应形参，根据形参或实参的具体类型可能会发生赋值、拷贝、移动、引用绑定或隐式转换；-->
+            ］［b:「b:
+                <xmp>
+                // 将不支持移动语义的右值实参传递给 std::thread 构造函数参数时
+                #include <iostream>
+                #include <thread>
+                #include <chrono>
+                using namespace std::chrono_literals;
+
+                class T {
+                public:
+                    // 构造
+                    T() {}
+
+                    // 拷贝
+                    T(const T& other) { 
+                        std::cout << "T copy constructor" << std::endl; 
+                    }
+                    T& operator=(const T& other) {
+                        std::cout << "T copy assign" << std::endl;
+                        return *this;
+                    }
+
+                    // 编写了拷贝构造/赋值而没有编写移动构造/赋值，编译器不会生成默认的移动构造/赋值
+                };
+
+                class G {
+                public:
+                    // 构造
+                    G() {}
+
+                    // 转换构造
+                    G(const T& t) {
+                        std::cout << "T->G converse constrctor" << std::endl;
+                    }
+
+                    // 拷贝
+                    G(const G& other) { 
+                        std::cout << "G copy constructor" << std::endl; 
+                    }
+                    G& operator=(const G& other) {
+                        std::cout << "G copy assign" << std::endl;
+                        return *this;
+                    }
+
+                    // 移动
+                    G(G&& other) { 
+                        std::cout << "G move constructor" << std::endl; 
+                    }
+                    G& operator=(G&& other) {
+                        std::cout << "G move assign" << std::endl;
+                        return *this;
+                    }
+                };
+
+                // a. 同类型的非引用型形参
+                void thrd_func0(T d) {}
+
+                // b. 同类型的引用型形参
+                void thrd_func1(const T& d) {}
+                void thrd_func2(T&& d) {}
+                void thrd_func3(const T&& d) {}
+                template <class T> void thrd_func4(T&& d) {}
+
+                // c. 不同类型的非引用型形参
+                void thrd_func5(G g) {}
+
+                // d. 不同类型的引用型形参
+                void thrd_func6(const G& d) {}
+                void thrd_func7(G&& d) {}
+                void thrd_func8(const G&& d) {}
+
+                int main(int argc, char** argv) {
+                    std::thread t0(thrd_func0, T()); std::this_thread::sleep_for(100ms);
+                    t0.join();
+
+                    std::cout << "-----------------" << std::endl;
+
+                    std::thread t1(thrd_func1, T()); std::this_thread::sleep_for(100ms);
+                    std::thread t2(thrd_func2, T()); std::this_thread::sleep_for(100ms);
+                    std::thread t3(thrd_func3, T()); std::this_thread::sleep_for(100ms);
+                    std::thread t4(thrd_func1, T()); std::this_thread::sleep_for(100ms);
+                    t1.join();
+                    t2.join();
+                    t3.join();
+                    t4.join();
+
+                    std::cout << "----------------" << std::endl;
+
+                    std::thread t5(thrd_func5, T());
+                    t5.join();
+
+                    std::cout << "----------------" << std::endl;
+
+                    std::thread t6(thrd_func6, T()); std::this_thread::sleep_for(100ms);
+                    std::thread t7(thrd_func7, T()); std::this_thread::sleep_for(100ms);
+                    std::thread t8(thrd_func8, T()); std::this_thread::sleep_for(100ms);
+                    t6.join();
+                    t7.join();
+                    t8.join();
+
+                    return 0;
+                }
+                /*
+                    输出结果：
+                    C++11/14 标准编译、关闭编译器优化——
+                    T copy constructor
+                    T copy constructor
+                    ----------------
+                    T copy constructor
+                    T copy constructor
+                    T copy constructor
+                    T copy constructor
+                    ----------------
+                    T copy constructor
+                    T->G converse constrctor
+                    G move constructor
+                    ----------------
+                    T copy constructor
+                    T->G converse constrctor
+                    T copy constructor
+                    T->G converse constrctor
+                    T copy constructor
+                    T->G converse constrctor
+
+                    C++11/14 标准编译、开启编译器优化——
+                    C++17 及以上标准编译、关闭编译器优化——
+                    T copy constructor
+                    T copy constructor
+                    ----------------
+                    T copy constructor
+                    T copy constructor
+                    T copy constructor
+                    T copy constructor
+                    ----------------
+                    T copy constructor
+                    T->G converse constrctor
+                    ----------------
+                    T copy constructor
+                    T->G converse constrctor
+                    T copy constructor
+                    T->G converse constrctor
+                    T copy constructor
+                    T->G converse constrctor
+                */
+                /*
+                    输出结果分析（以 C++11/14 标准编译、关闭编译器优化为例，用“=”表示拷贝，“->”表示移动，“<->”表示引用绑定）
+                    T copy constructor        // T() = t0内部存储（因为 T() 是右值，优先匹配移动，但是 T 没有移动，于是选择拷贝，拷贝的常左值引用型参数能绑定右值，匹配成功）
+                    T copy constructor        // t0内部存储 = thrd_func0非引用型形参（虽然 T() 保存到 t0 的内部存储之后变成了左值，但是经过 std::forward() 的转换后又成了右值，传递给 thrd_func0 形参时优先匹配移动，但是 T 没有移动，于是选择拷贝，拷贝的常左值引用型参数能绑定右值，匹配成功）
+                    ----------------
+                    T copy constructor        // T() = t1内部存储、t1内部存储 <-> thrd_func1常左值引用形参（因为 T() 是右值，优先匹配移动，但是 T 没有移动，于是选择拷贝，拷贝的常左值引用型参数能绑定右值，匹配成功；常左值引用能绑定 std::forward() 返回的右值，绑定成功）
+                    T copy constructor        // T() = t2内部存储、t2内部存储 <-> thrd_func2右值引用形参（因为 T() 是右值，优先匹配移动，但是 T 没有移动，于是选择拷贝，拷贝的常左值引用型参数能绑定右值，匹配成功；右值引用能绑定 std::forward() 返回的右值，绑定成功）
+                    T copy constructor        // T() = t3内部存储、t3内部存储 <-> thrd_func3常右值引用形参（因为 T() 是右值，优先匹配移动，但是 T 没有移动，于是选择拷贝，拷贝的常左值引用型参数能绑定右值，匹配成功；常右值引用能绑定 std::forward() 返回的右值，绑定成功）
+                    T copy constructor        // T() = t4内部存储、t4内部存储 <-> thrd_func4常左值引用形参（因为 T() 是右值，优先匹配移动，但是 T 没有移动，于是选择拷贝，拷贝的常左值引用型参数能绑定右值，匹配成功；通用引用能绑定 std::forward() 返回的右值，绑定成功）
+                    ----------------
+                    T copy constructor        // T() = t5内部存储（因为 T() 是右值，优先匹配移动，但是 T 没有移动，于是选择拷贝，拷贝的常左值引用型参数能绑定右值，匹配成功）
+                    T->G converse constrctor  // t5内部存储 to G()（因为 thrd_func5 的形参为 G 类型，而实参为 T 类型，于是先调用 G 的转换构造函数创建一个临时的 G 对象）
+                    G move constructor        // G() -> thrd_func5非引用型形参（因为 G 类型支持移动，而 G() 是临时对象、是右值，所以最终调用的是移动而不是拷贝）
+                    ----------------
+                    T copy constructor        // T() = t6内部存储（因为 T() 是右值，优先匹配移动，但是 T 没有移动，于是选择拷贝，拷贝的常左值引用型参数能绑定右值，匹配成功）
+                    T->G converse constrctor  // t6内部存储 to G()（因为 thrd_func6 的形参为 const G& 类型，而实参为 T 类型，于是先调用 G 的转换构造函数创建一个临时的 G 对象 G()，然后发生常左值引用绑定到右值的引用绑定）
+                    T copy constructor        // T() = t7内部存储（因为 T() 是右值，优先匹配移动，但是 T 没有移动，于是选择拷贝，拷贝的常左值引用型参数能绑定右值，匹配成功）
+                    T->G converse constrctor  // t7内部存储 to G()（因为 thrd_func7 的形参为 G&& 类型，而实参为 T 类型，于是先调用 G 的转换构造函数创建一个临时的 G 对象 G()，然后发生右值引用绑定到右值的引用绑定）
+                    T copy constructor        // T() = t8内部存储（因为 T() 是右值，优先匹配移动，但是 T 没有移动，于是选择拷贝，拷贝的常左值引用型参数能绑定右值，匹配成功）
+                    T->G converse constrctor  // t8内部存储 to G()（因为 thrd_func8 的形参为 const G&& 类型，而实参为 T 类型，于是先调用 G 的转换构造函数创建一个临时的 G 对象 G()，然后发生常右值引用绑定到右值的引用绑定）
+                */
+                </xmp>
+                <xmp>
+                // 将移动语义被删除的右值实参传递给 std::thread 构造函数参数时
+                #include <iostream>
+                #include <thread>
+                #include <chrono>
+                using namespace std::chrono_literals;
+
+                class T {
+                public:
+                    // 构造
+                    T() {}
+
+                    // 拷贝
+                    T(const T& other) { 
+                        std::cout << "T copy constructor" << std::endl; 
+                    }
+                    T& operator=(const T& other) {
+                        std::cout << "T copy assign" << std::endl;
+                        return *this;
+                    }
+
+                    // 禁用移动
+                    T(T&& other) = delete;
+                    T& operator=(T&& other) = delete;
+                };
+
+                class G {
+                public:
+                    // 构造
+                    G() {}
+
+                    // 转换构造
+                    G(const T& t) {
+                        std::cout << "T->G converse constrctor" << std::endl;
+                    }
+
+                    // 拷贝
+                    G(const G& other) { 
+                        std::cout << "G copy constructor" << std::endl; 
+                    }
+                    G& operator=(const G& other) {
+                        std::cout << "G copy assign" << std::endl;
+                        return *this;
+                    }
+
+                    // 移动
+                    G(G&& other) { 
+                        std::cout << "G move constructor" << std::endl; 
+                    }
+                    G& operator=(G&& other) {
+                        std::cout << "G move assign" << std::endl;
+                        return *this;
+                    }
+                };
+
+                // a. 同类型的非引用型形参
+                void thrd_func0(T d) {}
+
+                // b. 同类型的引用型形参
+                void thrd_func1(const T& d) {}
+                void thrd_func2(T&& d) {}
+                void thrd_func3(const T&& d) {}
+                template <class T> void thrd_func4(T&& d) {}
+
+                // c. 不同类型的非引用型形参
+                void thrd_func5(G g) {}
+
+                // d. 不同类型的引用型形参
+                void thrd_func6(const G& d) {}
+                void thrd_func7(G&& d) {}
+                void thrd_func8(const G&& d) {}
+
+                int main(int argc, char** argv) {
+
+                    // 编译失败
+                    // std::thread t0(thrd_func0, T()); 
+                    // t0.join();
+
+                    std::thread t1(thrd_func1, T()); std::this_thread::sleep_for(100ms);
+                    std::thread t2(thrd_func2, T()); std::this_thread::sleep_for(100ms);
+                    std::thread t3(thrd_func3, T()); std::this_thread::sleep_for(100ms);
+                    std::thread t4(thrd_func1, T()); std::this_thread::sleep_for(100ms);
+                    t1.join();
+                    t2.join();
+                    t3.join();
+                    t4.join();
+
+                    std::cout << "----------------" << std::endl;
+
+                    std::thread t5(thrd_func5, T());
+                    t5.join();
+
+                    std::cout << "----------------" << std::endl;
+
+                    std::thread t6(thrd_func6, T()); std::this_thread::sleep_for(100ms);
+                    std::thread t7(thrd_func7, T()); std::this_thread::sleep_for(100ms);
+                    std::thread t8(thrd_func8, T()); std::this_thread::sleep_for(100ms);
+                    t6.join();
+                    t7.join();
+                    t8.join();
+
+                    return 0;
+                }
+                /*
+                    C++11/14 标准编译、关闭编译器优化——
+                    T copy constructor
+                    T copy constructor
+                    T copy constructor
+                    T copy constructor
+                    ----------------
+                    T copy constructor
+                    T->G converse constrctor
+                    G move constructor
+                    ----------------
+                    T copy constructor
+                    T->G converse constrctor
+                    T copy constructor
+                    T->G converse constrctor
+                    T copy constructor
+                    T->G converse constrctor
+
+                    C++11/14 标准编译、开启编译器优化——
+                    C++17 及以上标准编译、关闭编译器优化——
+                    T copy constructor
+                    T copy constructor
+                    T copy constructor
+                    T copy constructor
+                    ----------------
+                    T copy constructor
+                    T->G converse constrctor
+                    ----------------
+                    T copy constructor
+                    T->G converse constrctor
+                    T copy constructor
+                    T->G converse constrctor
+                    T copy constructor
+                    T->G converse constrctor
+                */
+                </xmp>
+            」］
+
+            ④线程函数有引用型形参时注意点：［i:对于左值引用或常左值引用型的形参、且对应的形参是左值或常左值时，需要注意以下三点<br>
+                ＞a. 若要在线程函数内部修改实参或要让形参真正绑定到实参，实参（引用绑定目标）需要用 std::ref() 或 std::cref() 包裹起来；「i:这是因为：<br>
+                ＞第一，传递给线程函数的参数会先拷贝到 std::thread 对象的内部存储中，然后再传递给线程函数，因此不做这样的处理会导致引用型形参绑定的是实参的备份而非实参本身；<br>
+                ＞第二，std::ref()/std::cref() 会将引用/常引用包装为一个对象，且该对象重载了到其包装的引用类型的类型转换运算符，使得将它们赋值给引用时实际上是拿着其包装的引用进行赋值；这使得即使对 std::ref() 或 std::cref() 生成的对象进行拷贝或移动，其内部封装的仍然是原实参的引用，因此线程函数的引用型形参能成功绑定到对应的原来的实参；」<br>
+                ＞b. 线程执行期间用户必须保证绑定目标有效，否则这个引用型参数就会变成悬垂引用，进而可能导致未定义行为；<br>
+                ＞c. 按需进行线程同步，避免数据竞争；<br>
+                ＞对于线程函数的常左值引用型的形参、且对应的形参是右值，以及对于只能绑定右值实参的右值引用或常右值引用型的形参时，由于右值实参本来就是临时值，我们没有像左值引用那样在线程函数内部修改实参的值的需求，因此无需使用 std::ref() 或 std::cref() 进行包装；
+            ］
+
+            ⑤线程对象关联有效线程/joinable：［i:线程对象关联有效线程或者说线程对象是 joinable，是指线程对象关联了线程且此线程处于运行状态且未被 join 或 detach；「i:例如」
+            ］［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <thread>
+                #include <chrono>
+
+                int main(int argc, char** argv) {
+                    using namespace std::chrono_literals;
+
+                    std::thread t1([]() {
+                        std::this_thread::sleep_for(1s);
+                    });
+                    // 在这个时间节点上，t1 是 joinable 的，因为它关联了有效线程且该线程未被 join 或 detach
+
+                    t1.join();
+                    // 在这个时间节点上，t1 不再是 joinable 的，因为它关联的线程被 join 了，t1 不再关联任何有效线程
+
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ⑥线程对象移动语义要求/行为：［i:线程对象的移动语义要求如下<br>
+                ＞a. 移动赋值时，做为移动目标的线程对象不能关联任何有效线程，否则会触发 std::terminate() 导致程序终止；<br>
+                ＞b. 当做为移动源的线程对象可以关联有效线程，也可以不关联有效线程；<br>
+                ＞移动操作的行为如下<br>
+                ＞a. 当做为移动源的线程对象关联了有效线程时，移动操作会解除此关联并让做为移动目标的线程对象关联该线程；<br>
+                ＞b. 移动操作不会影响线程的正常执行；「i:例如」
+            ］［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <thread>
+                #include <chrono>
+
+                int main(int argc, char** argv) {
+                    using namespace std::chrono_literals;
+
+                    std::thread t1([]() {
+                        std::this_thread::sleep_for(1s);
+                    });
+                    std::thread t2([]() {
+                        std::this_thread::sleep_for(2s);
+                    });
+                    // t1 = std::move(t2); // error，移动目标不能关联任何线程
+                    std::thread t3(std::move(t1)); // ok
+
+                    // t1.join(); // error，t1 已经不再关联任何线程
+                    t3.join();
+                    t2.join();
+
+                    t2 = std::move(t3); // ok，不关联任何线程的对象之间也可以相互移动，但没有任何意义
+
+                    return 0;
+                }
+                </xmp>
+                为了让`t1 = std::move(t2)`也能成功执行，可以把它放在`t1.join()`执行结束之后，因为这样 t1 就不再关联任何线程，可以做为移动目标；但是需要再次通过 t1 调用 join()，因为 t2 已经不再关联任何有效线程；
+                <xmp>
+                #include <iostream>
+                #include <thread>
+                #include <chrono>
+
+                int main(int argc, char** argv) {
+                    using namespace std::chrono_literals;
+
+                    std::thread t1([]() {
+                        std::this_thread::sleep_for(1s);
+                    });
+                    std::thread t2([]() {
+                        std::this_thread::sleep_for(2s);
+                    });
+
+                    t1.join(); // 这之后 t1 不再关联有效线程 
+                    t1 = std::move(t2); // 这之后 t2 不再关联有效线程、t1 关联了 t2 原本关联的线程
+                    t1.join(); // 因此这里再次通过 t1 调用 join() 而不是 t2
+
+                    return 0;
+                }
+                </xmp>
+                通过上面两次调用`t1.join()`，我们可以对判断线程对象是否 joinable 中的“线程对象关联的线程处于运行状态且未被 join 或 detach”有更加深入的认识，即不能看线程对象是否被 join 和 detach，因为结合移动语义一个线程对象可以被多次 join 或 detach，而是看它关联的线程是否被 join 或 detach，一个实际的线程只能被一次 join 或 detach； 
+            」］
+
+            ⑦std::thread 默认构造特点、意义：［i:通过 std::thread 的默认构造函数创建的线程对象不会关联任何有效线程；其意义在于当把线程对象做为成员变量时，能通过结合移动赋值让它关联有效线程；「i:例如」］［b:「b:
+                <xmp>
+                #include <iostream>
+                #include <thread>
+                #include <chrono>
+                using namespace std::chrono;
+                using namespace std::chrono_literals;
+
+                class Sleeper {
+                private:
+                    std::thread _thrd;
+                public:
+                    void start_sleep1() {
+                        _thrd = std::thread([]() {
+                            std::this_thread::sleep_for(1s);
+                        });
+                        _thrd.join();
+                    }
+
+                    void start_sleep2() {
+                        std::this_thread::sleep_for(1s);
+                    }
+                };
+                // start_sleep1() 虽然启动了一个线程让它睡眠，但是又调用了 join()，所以与 start_sleep2() 让主线程阻塞的时间是一样的
+
+                int main(int argc, char** argv) {
+                    Sleeper s;
+
+                    system_clock::time_point tp0 = system_clock::now();
+                    std::cout << tp0 << std::endl; // c++20
+                    s.start_sleep1();
+                    s.start_sleep2();
+                    system_clock::time_point tp1 = system_clock::now();
+                    std::cout << tp1 << std::endl; // c++20
+
+                    return 0;
+                }
+                </xmp>
+            」］
+
+            ⑧静态成员函数做线程函数语法：［i:在类外将`类名::静态成员函数名`或`&类名::静态成员函数名`传递给 std::thread 构造函数的第一个形参；在类内可以省略作用域限定`类名::`，即］［b:
+                <xmp>
+                // 类外
+                std::thread thrd(类名::静态成员函数名, 传递给此成员函数的实参);
+                std::thread thrd(&类名::静态成员函数名, 传递给此成员函数的实参);
+
+                // 类内
+                std::thread thrd(静态成员函数名, 传递给此成员函数的实参);
+                std::thread thrd(&静态成员函数名, 传递给此成员函数的实参);
+                std::thread thrd(类名::静态成员函数名, 传递给此成员函数的实参);
+                std::thread thrd(&类名::静态成员函数名, 传递给此成员函数的实参);
+                </xmp>
+                与普通成员函数做线程函数不同的是，不需要传递对象地址或 this 指针给线程函数的第一个参数，因为静态成员函数没有这个隐藏的参数；「i:例如」「b:
+                    <xmp>
+                    /* 
+                     * 1) 每实例化一个类的对象，就启动一个线程对某个静态成员变量执行某种耗时操作；
+                     * 2) 当对象被销毁时若对应的线程还未结束则先等待线程结束并回收线程资源、若线程已经结束则先回收线程资源，再销毁对象；
+                     */
+                    #include <iostream>
+                    #include <thread>
+                    #include <chrono>
+                    #include <mutex>
+                    using namespace std::chrono_literals;
+
+                    class Demo {
+                    private:
+                        static int _n;
+                        static std::mutex _mtx;
+
+                        std::thread _thrd;
+                    public:
+                        static void handle_n() { 
+                            // 模拟对 _n 的耗时操作（此处简单地加一并延时半秒）
+                            std::lock_guard<std::mutex> lock(_mtx);
+                            ++_n;
+                            std::this_thread::sleep_for(500ms);
+                        }
+
+                        static int get_n() {
+                            std::lock_guard<std::mutex> lock(_mtx);
+                            return _n;
+                        }
+                        
+                        // 创建对象时对 _n 执行 do_something 操作
+                        Demo() {
+                            _thrd = std::thread(handle_n); // &handle_n、Demo::handle_n、&Demo::handle_n 也都合法
+                        }
+
+                        // 对象销毁时若操作线程未结束则等待线程结束、回收线程资源
+                        ~Demo() {
+                            _thrd.join();
+                        }
+
+                        // 禁用拷贝
+                        Demo(const Demo& other) = delete;
+                        Demo& operator=(const Demo& other) = delete;
+                    };
+                    // 静态成员变量类外定义和初始化
+                    int Demo::_n = 0; 
+                    std::mutex Demo::_mtx;
+
+                    int main(int argc, char** argv) {
+                        {
+                            Demo d1, d2;
+                        }
+                        std::cout << Demo::get_n() << std::endl; // 输出 2
+
+                        return 0;
+                    }
+                    </xmp>
+                    注意因为可能在很短的时间内创建对个对象，每个对象都对应一个线程，这些线程都会访问同一个静态变量，因此必须进行线程同步避免数据竞争；
+                」
+            ］
+
+            ⑨可把线程函数设计为静态方法的场景：［i:把线程函数设计为静态方法的典型场景有
+                ＞a. 单纯地想让某个静态成员函数与当前或其他线程并发执行；<br>
+                ＞b. 某个（非静态或静态）成员函数需要创建线程，且线程函数不会访问非静态成员变量（可能不访问任何成员变量，或只可能访问静态成员变量），「i:因为静态成员函数本身就不能访问非静态成员变量」；
+                ＞「i:上一问题的例子演示了条款 b，因此我们只举一个例子来演示条款 a.」
+            ］［b:「b:
+                <xmp>
+                // 设计一个简单的生产者消费者模型：
+                // 设计一个类，存在一个静态成员变量 _n，以及一个作为生产者的静态成员函数和一个作为消费者的静态成员函数，它们分别不断地将 _n 加一和减一
+                // 启动两个线程将以上两个静态成员函数做为线程函数，以让这两个成员函数并发执行来启动生产-消费流
+                // 启动一个监视线程，每隔一段时间输出 _n 的值
+                #include <iostream>
+                #include <thread>
+                #include <mutex>
+                #include <chrono>
+                using namespace std::chrono_literals;
+                
+                class Demo {
+                private:
+                    static int _n;
+                    static std::mutex _mtx;
+                public:
+                    // 生产者
+                    static void producer() {
+                        for (;;) {
+                            std::lock_guard<std::mutex> lock(_mtx);
+                            ++_n;
+                        }
+                    }
+                    
+                    // 消费者
+                    static void consumer() {
+                        for (;;) {
+                            std::lock_guard<std::mutex> lock(_mtx);
+                            --_n;
+                        }
+                    }
+
+                    // 获取 _n 的值
+                    static int get_n() {
+                        std::lock_guard<std::mutex> lock(_mtx);
+                        return _n;
+                    }
+                };
+                int Demo::_n = 0;
+                std::mutex Demo::_mtx;
+
+                int main(int argc, char** argv) {
+                    std::thread consumer_thrd(Demo::consumer);
+                    std::thread producer_thrd(Demo::producer);
+                    std::thread checker_thrd([]() {
+                        for (;;) {
+                            std::cout << Demo::get_n() << std::endl;
+                            std::this_thread::sleep_for(500ms);
+                        }
+                    });
+
+                    consumer_thrd.join();
+                    producer_thrd.join();
+                    checker_thrd.join();
+
+                    return 0;
+                }
+                </xmp>
+                」
+            ］
+
+            ⑩普通成员函数做线程函数：［i:在类外将`类名::成员函数名`或`&类名::成员函数名`传递给 std::thread 构造函数的第一个形参、将它所属的对象的地址传递给第二个参数；在类内可以省略作用域限定`类名::`、并将 this 指针传递给第二个参数；之所以传递所属对象的地址是因为非静态成员函数有一个隐藏的参数、用于接收调用对象的地址以访问它的成员变量，即
+            <xmp>
+            // 类外
+            std::thread thrd(类名::成员函数名, &所属对象, 传递给此成员函数的实参);
+            std::thread thrd(类名::成员函数名, &所属对象, 传递给此成员函数的实参);
+
+            // 类内
+            std::thread thrd(成员函数名, this, 传递给此成员函数的实参);
+            std::thread thrd(&成员函数名, this, 传递给此成员函数的实参);
+            std::thread thrd(类名::普通成员函数名, this, 传递给此成员函数的实参);
+            std::thread thrd(&类名::普通成员函数名, this, 传递给此成员函数的实参);
+            </xmp>「i:例如」］［b:「b:
+                <xmp>
+                // 此例仅用于演示语法格式，无实际意义
+                #include <iostream>
+                #include <thread>
+
+                class Demo {
+                private:
+                    int _n;
+                public:
+                    // 构造函数
+                    Demo(int n) noexcept :_n(n) {}
+                    // 普通成员函数
+                    void set_n(int n) noexcept { _n = n; }
+                    int get_n() noexcept { return _n; }
+                };
+
+                int main(int argc, char** argv) {
+                    Demo obj(1);
+
+                    std::thread thrd1(Demo::set_n, &obj, 2);
+                    thrd1.join();
+                    std::cout << obj.get_n() << std::endl;
+
+                    std::thread thrd2(&Demo::set_n, &obj, 3);
+                    thrd2.join();
+                    std::cout << obj.get_n() << std::endl;
+
+                    return 0;
+                }
+                </xmp>
+                」
+            ］
+
+            ⑪将线程函数设计为非静态方法的场景：［i:某个非静态成员函数需要创建线程，且该线程需要访问成员变量；注意我们一般不会单纯地让对象的某个非静态成员函数与当前或其他线程并发执行，因为这不方便针对要访问的成员变量做线程同步，除非它所属的类已经做好了线程同步或修改源代码，但这一般不现实；］［b:「b:
+                <xmp>
+                // 某个非静态成员函数需要创建线程，且该线程需要访问成员变量
+                // 对象中存在一个非静态成员变量 _n 和一个非静态成员函数 start_add_thrd()，调用该函数就会每半秒对 _n 执行一次自增操作，对象被销毁时结束线程
+                #include <iostream>
+                #include <thread>
+                #include <chrono>
+                #include <atomic>
+                using namespace std::chrono_literals;
+
+                class Demo {
+                private:
+                    int _n;
+
+                    std::thread _add_thrd;
+                    bool _is_add_thrd_start;
+                    std::atomic<bool> _add_thrd_exit_flag;
+                public:
+                    // 构造函数
+                    Demo(int n) 
+                        :_n(n), 
+                        _is_add_thrd_start(false) 
+                    {
+                        _add_thrd_exit_flag.store(false);
+                    }
+
+                    // 累加线程的线程函数
+                    void add() {
+                        while (!_add_thrd_exit_flag.load()) {
+                            ++_n;
+                            std::this_thread::sleep_for(0.5s);
+                        }
+                    }
+
+                    // 启动累加线程
+                    void start_add_thrd() {
+                        // 确保线程只能启动一次
+                        if (_is_add_thrd_start) {
+                            throw std::runtime_error("Add thread already start!");
+                        }
+                        _is_add_thrd_start = true;
+
+                        // 创建并启动线程
+                        _add_thrd = std::thread(add, this);
+                    }
+
+                    // 析构函数
+                    ~Demo() {
+                        // 通知累加线程退出
+                        _add_thrd_exit_flag.store(true);
+                        // 等待线程退出并回收资源
+                        if (_add_thrd.joinable()) { 
+                            // 必须判断线程对象是否可 joinable，以避免用户只创建 Demo 对象但没有调用 start_add_thrd() 成员函数时对未关联任何有效线程的 _add_thrd 线程对象执行 join 操作
+                            _add_thrd.join();
+                        }
+                        // 最后打印 _n 的值
+                        std::cout << _n << std::endl;
+                    }
+                };
+
+                int main(int argc, char** argv) {
+                    {
+                        Demo d1(0);
+                        std::this_thread::sleep_for(2s);
+                    }
+                    {
+                        Demo d2(0);
+                        d.start_add_thrd();
+                        std::this_thread::sleep_for(2.1s);
+                    }
+                    return 0;
+                }
+                </xmp>
+                最终输出结果为 0 和 5，输出 0 是因为 d1 对象没有调用 start_add_thrd() 启动自增线程，最后的结果仍然是 _n 的初始值 0；输出 5 是因为，当主线程睡眠刚超过 2s 时，_n 已被自增了 4 次且自增线程刚刚对 _n 执行了第五次自增操作并进入了第五次累加的睡眠状态，主线程睡眠到 2.1s 时 d2 所在的作用域结束、d2 即将被销毁，此时会先调用它的析构函数、将线程退出标志设为 true 并调用 join() ，这会使主线程陷入阻塞；当自增线程结束睡眠（此时从主线程开始睡眠已经过去了 2.5s）并执行下一次循环时，由于自增线程退出标志被设置为了 true 使得循环条件不成立，所以自增线程结束，d2 析构函数的 join() 方法返回，因为自增线程一共对 _n 执行了 5 次自增操作，所以最后 _n 的值为 5；
+                」
+            ］
+
+
+            ⑫普通成员函数做线程函数时注意点：［i:普通成员函数做线程函数时需要注意以下两点<br>
+                ＞a. 如果只是单纯地想让对象的某个非静态成员函数并发执行，线程退出前用户必须保证对象的有效性，否则传递给 this 指针的实参就会变成一个垂悬指针或空指针，进而导致未定义行为；<br>
+                ＞b. 针对该非静态成员函数要访问的（非静态）成员变量做好线程同步（如果这些成员变量还会被对应其他线程的其他成员函数访问的话），避免数据竞争；
+            ］
+
+            ⑬普通成员函数做线程函数时能否将“对象名.目标成员函数名”或“对象指针->目标成员函数名”做 std::thread 构造函数第一个参数：［i:不能，因为成员访问运算符“.”或“->”后面跟成员函数时只能接“()”调用该函数；］
+
+        3) join 和 detach：
+            ①如何实现线程的 join 和 detach：［i:分别通过线程对象的 join() 和 detach() 方法，它们能让调用线程与父线程会合与分离；］
+
+            ②子线程是否必须 join 或 detach：［i:是；因为这指定了线程资源的回收方式，若不调用会导致资源泄漏，std::thread 的析构函数会调用 std::terminate() 导致程序终止；］
+
+            ③子线程不 join 或 detach 会怎样：［i:线程对象（或者说 std::thread 的）的析构函数会调用 std::terminate() 导致程序终止；］
+
+            ④join 和 detach 失败的情况：［i:当线程对象没有关联有效线程/不是 joinable 的，调用 join() 或 detach() 就会失败；「i:例如以下线程对象就没有关联有效线程、都不是 joinable、join 和 detach 都会失败——<br>
+                ＞a. 刚刚通过默认构造函数创建的线程对象（没有关联有效线程）；<br>
+                ＞b. 线程对象关联的线程刚被 join 或 detach 过（一旦调用 join 或 detach 方法线程对象就会与线程对象解除关联，即没有关联线程）；<br>
+                ＞c. 线程对象刚刚被做为移动源进行移动操作（如果线程对象关联了有效线程，则成功的移动操作会让解除关联并让移动目标关联此线程）；<br>
+                ＞d. ……
+            」］
+
+            ⑤判断是否关联有效线程/joinable：［i:通过 joinable() 方法；］
+
+            ⑥各节点线程对象是否 joinable：［qb:
+                <xmp>
+                #include <iostream>
+                #include <thread>
+                
+                int main(int argc, char** argv) {
+                    int n = 0, m = 0;
+
+                    std::thread t0([&m]() {
+                        for (int i = 0; i < 10000; ++i) {
+                            ++m;
+                        }
+                    });
+                    std::cout << t0.joinable() << std::endl;
+                    // 节点1, t0
+
+                    std::thread t1;
+                    std::cout << t1.joinable() << std::endl;
+                    // 节点2, t1
+
+                    std::thread t2([&n]() {
+                        for (int i = 0; i < 10000; ++i) {
+                            ++n;
+                        }
+                    });
+                    t2.join();
+                    std::cout << t2.joinable() << std::endl;
+                    // 节点3, t2
+
+                    t2 = std::move(t0);
+                    std::cout << t0.joinable() << std::endl;
+                    std::cout << t2.joinable() << std::endl;
+                    // 节点4, t0, t2
+
+                    t2.detach();
+                    std::cout << t2.joinable() << std::endl;
+                    // 节点5, t2
+
+                    std::thread t3(std::move(t2));
+                    std::cout << t3.joinable() << std::endl;
+                    // 节点6, t3
+
+                    return 0;
+                }
+                </xmp>
+            ］［b:
+                ＞节点 1：t0 是 joinable 的；<br>
+                ＞节点 2：t1 不是 joinable 的，因为创建线程对象 t1 是通过默认构造函数创建的、时未指定线程函数；<br>
+                ＞节点 3：t2 是非 joinable 的，因为它关联的线程被 join 了导致 t2 不再关联有效线程；<br>
+                ＞节点 4：t0 不再是 joinable 的，因为它被作为了移动源进行了移动操作，不再关联有效线程；t2 是 joinable 的，因为它通过移动操作关联了 t0 原本关联的有效线程；<br>
+                ＞节点 5：t2 是非 joinable 的，因为它关联的线程被 detach 了导致 t2 不再关联有效线程；<br>
+                ＞节点 6：t3 是非 joinable 的，因为做为移动源的 t2 并没有关联有效线程，移动后它自己也不会关联有效线程；
+            ］
+    </article>
+    <script src="js/global.js"></script>
+</body>

@@ -1,0 +1,1847 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C++ 时间日期处理</title>
+    <!-- 0. 全局样式表 -->
+    <link rel="stylesheet" href="css/global.css">
+    <!-- 1. 引入 Highlight.js 样式表（这里使用默认主题） -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <!-- 2. 引入 Highlight.js 核心库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- 3. 按需引入 C++ 语言插件（如果使用 ES6 模块，则可以直接使用核心库的内置支持，无需单独引入） -->
+    <!--
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+    -->
+</head>
+<body>
+    <article>
+    [页眉: 31. C++ 时间日期处理]
+        <h3>1. 时钟类型</h3>
+        1) 时钟类型及其相关概念：
+            ①C++11 引入的三种时钟类型：［i:system_clock、steady_clock、high_resolution_clock；］
+
+            ②三种时钟类型的含义：［i:system_clock、steady_clock 和 high_resolution_clock 的含义如下］［b:
+                &emsp;&nbsp;a. system_clock：系统时钟，也叫壁钟，即当前操作系统显式和使用的时钟；<br>
+                &emsp;&nbsp;b. steady_clock：稳定时钟，只能向前推进不能后退，具体来说通过该时钟后获取的时间点一定比先获取的时间点对应的时间更晚；<br>
+                &emsp;&nbsp;c. high_resolution_clock：高精度时钟，当前平台支持的最高精度的时钟（可能就是 system_clock 和 steady_clock 中精度较高的那个）；
+            ］
+
+            ③何为时钟稳定性、以上时钟都稳定么：［i:时钟稳定性是指时间只能单调递增；system_clock 不是稳定的，用户可以通过修改操作系统的壁钟来修改 system_clock；steady_clock 是稳定的，它取自处理器的 tick 时间、用户修改操作系统的壁钟不影响 steady_clock；high_resolution_clock 不一定是稳定的，取决于编译器实现；］
+
+            ④何为时间纪元、以上时钟的时间纪元：［i:时间纪元是时间戳的基准时间或起始时间；system_clock 的时间纪元为 1970-01-01 00:00:00 UTC；steady_clock 的时间纪元为机器启动时间；high_resolution_clock 的时间纪元是不确定的，取决于编译器实现；］
+
+        2) 时钟类型的基本操作：
+            ①三种时钟类型所在的命名空间和库：［i: 命名空间为`std::chrono`；库为`chrono`；］
+
+            ②分别获取三种时钟的当前时间：［i:都是通过`now()`静态方法；「i:例如」］［b:「b:
+                ```c++
+                using std::chrono::system_clock;
+                using std::chrono::steady_clock;
+                using std::chrono::high_resolution_clock;
+
+                system_clock::time_point tp1 = system_clock::now();
+                steady_clock::time_point tp2 = steady_clock::now();
+                high_resolution_clock::time_point tp3 = high_resolution_clock::now();
+                ```
+            」］
+
+            ③如何判断一种时钟类型是否稳定：［i:通过`is_steady`静态成员变量；「i:例如」］［b:「b:
+                ```c++
+                using std::chrono::system_clock;
+                using std::chrono::steady_clock;
+                using std::chrono::high_resolution_clock;
+
+                bool res1 = system_clock::is_steady;
+                bool res2 = steady_clock::is_steady;
+                bool res3 = high_resolution_clock::is_steady;
+
+                std::cout &lt;&lt; std::boolalpha &lt;&lt; res1 &lt;&lt; " " &lt;&lt; res2 &lt;&lt; " " &lt;&lt; res3 &lt;&lt; std::endl;
+                // 输出 false、true、true（最后一个也可能是 false，取决于编译器实现）
+                ```
+            」］
+
+            ④测量一过程的耗时应使用哪个类型：［i:用 steady_clock，因为它是稳定的（单调递增的）、即便测量期间修改了系统壁钟时间，也不影响测量结果；］
+
+
+        <h3>2. 时间精度</h3>
+        1) std::ratio&lt;&gt; 模板类型：
+            ①std::ratio&lt;&gt; 的含义：［i: std::ratio&lt;&gt; 用于表示一个比例（或分数）；］
+
+            ②*std::ratio&lt;&gt; 的完整声明：［b: 
+                ```c++
+                template &lt;std::intmax_t Num, std::intmax_t Denom = 1&gt;
+                class ratio;
+                ```
+            ］
+
+            ③std::ratio&lt;&gt; 定义对象的语法格式：［i: 语法格式为`std::ratio&lt;分子, 分母&gt; 对象名;`；「i:例如`std::ratio&lt;1, 1000&gt; r`中，对象`r`表示 1:1000 这个比例；」］
+
+            ④std::ratio&lt;&gt; 简写条件与简写形式：［i: 当分母为 1 时可以简写，简写形式为省略分母、即`std::ratio&lt;num&gt;`；「i:例如`std::ratio&lt;3600&gt; r`中，对象`r`表示 3600:1 这个比例；」］
+
+            ⑤std::ratio&lt;&gt; 的作用：［i: std::ratio&lt;&gt; 的主要用法为编译时比例计算（如单位换算），即把比例计算从运行时转移到编译时，降低运行时开销、提高程序性能；具体做法为将一个比例做为参数时，可以设置一个模板形参用于接收 std::ratio&lt;&gt; 的模板实例，在模板内通过静态成员`num`获取它表示的比例的分子、通过静态成员`den`获取它表示的比例的分母，从而得到它表示的比例，由于`num`和`den`都是编译时常量、在编译时会被替换为其代表的常量并完成后续可能的编译时计算，从而相比设置一个普通形参接收 std::ratio&lt;&gt; 对象能减少运行时开销、提高程序性能；「i:例如求一个数乘以一个固定比例后的结果的函数模板`compute&lt;&gt;()`（其中此固定比例可以由用户指定），以及用它做秒数到分钟的单位换算」］［b:「b:
+                ```c++
+                template &lt;typename Ratio&gt;
+                double compute(double num) {
+                    static_assert(std::is_same_v&lt;Ratio, std::ratio&lt;Ratio::num, Ratio::den&gt;&gt;); // 类型检查，检查 Ratio 是否为 std::ratio 的具体类
+                    return num * Ratio::num / Ratio::den; // 通过编译时常量 num 和 den 使用 Ratio 定义的比率
+                }
+
+                double min = compute&lt;std::ratio&lt;1, 60&gt;&gt;(150); // d 的值为 1.5
+                ```
+            」］
+
+            ⑥分子分母存在公约数时如何：［i: 自动约分；「i: 例如对于`std::ratio&lt;10, 5&gt;`，分子分母存在最大公约数 5，因此最终`std::ratio&lt;10, 5&gt;::num == 2`、`std::ratio&lt;10, 5&gt;::den == 1`；」］
+
+            ⑦分子分母存在负数时如何：［i: 分母恒为正，符号汇总到分子；「i: 例如对于`std::ratio&lt;7, -3&gt;`，最终`std::ratio&lt;7, -3&gt;::num == -7`、`std::ratio&lt;7, -3&gt;::den == 3`；」］
+
+            ⑧std::ratio&lt;&gt; 是否存在运行时开销：［i: 取决于你怎么用它，若使用它定义对象，则一定存在运行时开销；若只是使用类型名访问`num`和`den`这两个成员则不存在运行时开销，因为它们都是编译时常量、在编译时就会被编译器替换为对应的常量并进行后续可能的编译时计算；］
+
+            ⑨分子分母的取值范围：［i: 取值范围为 intmax_t 能表示的范围且分母不能为 0（intmax_t 一般表示所有 64 位整数，在 64 位平台中一般为 long，在 32 位平台中一般为 long long）；］
+
+            ⑩预定义的常用比例(吉兆千毫微纳)：［i:标准库预定义了一些常用的比例，方便我们进行数学计算（重点掌握太吉兆千毫微纳）］［b:「b:
+                ```c++
+                std::yocto        1:10^24  (幺)
+                std::zepto        1:10^21  (仄)
+                std::atto         1:10^18  (阿)
+                std::femto        1:10^15  (飞)
+                std::pico         1:10^12  (皮)
+                std::nano         1:10^9   (纳)
+                std::micro        1:1000000(微)
+                std::milli        1:1000   (毫)
+                std::centi        1:100    (厘)
+                std::deci         1:10     (分)
+                std::deca        10:1      (十)
+                std::hecto      100:1      (百)
+                std::kilo      1000:1      (千)
+                std::mega   1000000:1      (兆)
+                std::giga      10^9:1      (吉)
+                std::tera     10^12:1      (太)
+                std::peta     10^15:1      (拍)
+                std::exa      10^18:1      (艾)
+                std::zetta    10^21:1      (泽)
+                std::yotta    10^24:1      (尧)
+                ```
+            」］
+
+            ⑪表示两个比例之和/差/积/商/比较结果的各种复合比例类型及其用法：［b: 
+                ```c++
+                std::ratio_add      表示两个比例之和
+                std::ratio_subtract 表示两个比例之差
+                std::ratio_multiply 表示两个比例之积
+                std::ratio_devide   表示两个比例之商
+
+                std::ratio_greater       表示比较比例 1 是否大于比例 2，通过静态成员 value 获取结果
+                std::ratio_greater_equal 表示比较比例 1 是否大于等于比例 2，通过静态成员 value 获取结果
+                std::ratio_less          表示比较比例 1 是否小于比例 2，通过静态成员 value 获取结果
+                std::ratio_less_equal    表示比较比例 1 是否小于等于比例 2，通过静态成员 value 获取结果
+                std::ratio_equal         表示比较比例 1 是否等于比例 2，通过静态成员 value 获取结果
+                std::ratio_not_equal     表示比较比例 1 是否不等于比例 2，通过静态成员 value 获取结果
+
+                std::ratio_greater_v       表示比较比例 1 是否大于比例 2 的比较结果，等价于 std::ratio_greater&lt;>::value
+                std::ratio_greater_equal_v 表示比较比例 1 是否大于等于比例 2 的比较结果，等价于 std::ratio_greater_equal&lt;>::value
+                std::ratio_less_v          表示比较比例 1 是否小于比例 2 的比较结果，等价于 std::ratio_less&lt;>::value
+                std::ratio_less_equal_v    表示比较比例 1 是否小于等于比例 2 的比较结果，等价于 std::ratio_less_equal&lt;>::value
+                std::ratio_equal_v         表示比较比例 1 是否等于比例 2 的比较结果，等价于 std::ratio_equal&lt;>::value
+                std::ratio_not_equal_v     表示比较比例 1 是否不等于比例 2 的比较结果，等价于 std::ratio_not_equal&lt;>::value
+                ```
+                用法为
+                ```c++
+                std::ratio_add/subtract/multiply/devide&lt;std::ratio&lt;num1, den1>, std::ratio&lt;num2, den2>>
+                // 两个模板实参代表要求和/差/积/商的比例，结果仍然表示一个比例
+
+                std::ratio_greater/less/equal/not_equal&lt;std::ratio&lt;num1, den1>, std::ratio&lt;num2, den2>>::value
+                // 两个模板实参代表要比较大小或是否相等的比例，结果为布尔类型
+
+                std::ratio_greater/less/equal/not_equal&lt;std::ratio&lt;num1, den1>, std::ratio&lt;num2, den2>>_v
+                // 两个模板实参代表要比较大小或是否相等的比例，结果为布尔类型
+                ```
+                「i:例如`std::ratio_multiply &lt;std::ratio&lt;1, 2>, std::ratio&lt;3, 4>>`就代表 3:8 这个比例；」
+            ］
+            
+        2) 时间精度：
+            ①什么是时间精度：［i: 时间精度，也叫时间单位、时钟 tick 周期，即最小能分辨的时间间隔；］
+
+            ②C++ 如何表示时间精度：［i: C++ 使用一个比例来表示时间精度，表示在分子表示的秒数内 tick 分母对应的次数，对应的 tick 周期就是时间精度，或者更简单地说，`分子/分母`秒就是时间精度；「i:例如」］［b:
+                「b:
+                    ```c++
+                    1:1     1 秒内 tick 一次、周期为 1s，即时间精度为 1s
+                    1:1000  1 秒内 tick 1000 次，周期为 1ms，即时间精度为 1ms
+                    3600:1  3600 秒 tick 一次、周期为 1h，即时间精度为 1h
+                    ```
+                」
+                由于 std::ratio&lt;&gt; 可以表示一个比例，因此也可以说 C++ 使用 std::ratio&lt;&gt;（或其他表示对两个比例进行加减乘除四则运算的复合比例类型，如 std::ratio_multiply）表示时间精度；
+            ］
+
+            ③获取各种时钟类型的时间精度：［i: 通过 period 这个 std::ratio&lt;&gt; 类型的静态成员变量的 num 和 den 成员；「i:例如」］［b:「b:
+                ```c++
+                std::intmax_t n = std::chrono::system_clock::period::num;
+                std::intmax_t d = std::chrono::system_clock::period::den;
+                ```
+            」］
+
+            ④各种时钟类型的时间精度：［i:system_clock 一般为 100ns 或 1ns；steady_clock 一般为 1ns；high_resolution_clock 不确定、取决于编译器实现；］
+
+
+        <h3>3. 时间间隔类型</h3>
+        1) std::chrono::duration&lt;&gt; 基本概念与对象定义：
+            ①std::chrono::duration&lt;&gt; 的作用：［i: 其对象表示一个时间间隔；］
+            
+            ②*std::chrono::duration&lt;&gt; 完整声明：［i: std::duration&lt;&gt; 模板类型的完整声明如下
+            ］［b:
+                ```c++
+                template &lt;typename Rep, typename Period = std::ratio&lt;1&gt;
+                class duration;
+                // Rep：用什么数字类型表示时间间隔数值；
+                // Period：时间精度（tick 周期），默认为秒；
+                ```
+            ］
+
+            ③对象的定义和初始化：［i:定义对象时需要指定时间间隔数值的类型和时间精度（tick 周期）、即具体化模板形参 Rep 和 Period；一般使用数字类型进行初始化，该数值将做为时间间隔数值；典型语法格式为`std::chrono::duration&lt;表示时间间隔数值的类型, 时间精度&gt; 对象名(时间间隔数值);`；「i:例如」］［b:「b:
+                ```c++
+                std::chrono::duration&lt;double, std::milli&gt; dur(1.5);
+                // 由于 std::milli 是 std::ratio&lt;1, 1000&gt;的别名，所以dur 表示 1.5 毫秒
+                ```
+            」］
+
+            ④xxx_clock::duration 类型：［i:本质是`std::chrono::duration&lt;xxx_clock::Rep, xxx_clock::Period&gt;`类型，其中`Rep`为该时钟类型的时间数值类型的别名，`Period`为该时钟类型的时间精度的别名；「i:例如对于 system_clock」］［b:「b:
+                ```c++
+                namespace std::chrono {
+                    class system_clock {
+                        using Rep = long long;
+                        using Period = std::ratio&lt;1, 10000000&gt; // 100ns
+                        using duration = nanoseconds;
+                        ... 
+                    };
+                }
+                ```
+            」］
+
+            ⑤预定义的常用时间间隔类型：［b:
+                ```c++
+                小时 std::chrono::hours        &lt;=&gt; std::chrono::duration&lt;int, std::ratio&lt;3600&gt;&gt;
+                分钟 std::chrono::minutes      &lt;=&gt; std::chrono::duration&lt;int, std::ratio&lt;60&gt;&gt;
+                秒数 std::chrono::seconds      &lt;=&gt; std::chrono::duration&lt;long long, std::ratio&lt;1&gt;&gt;
+                毫秒 std::chrono::milliseconds &lt;=&gt; std::chrono::duration&lt;long long, std::milli&gt;
+                微秒 std::chrono::microseconds &lt;=&gt; std::chrono::duration&lt;long long, std::micro&gt;
+                纳秒 std::chrono::nanoseconds  &lt;=&gt; std::chrono::duration&lt;long long, std::nano&gt;
+                ```
+            ］
+
+            ⑥以上预定义类型的用户定义字面量：［b:
+                ```c++
+                小时：后缀为 h；例如 1h, 1.5h
+                分钟：后缀为 min；例如 1min, 1.5min
+                秒：后缀为 s；例如 1s, 1.5s
+                毫秒：后缀为 ms；例如 1ms, 1.5ms
+                微秒：后缀为 us；例如 1us, 1.5us
+                纳秒：后缀为 ns；例如 1ns, 1.5ns
+                ```
+            ］
+        
+        
+        2) 时间间隔类型的基本操作：
+            ①获取对象表示的时间间隔数值：［i: 通过`count()`方法；「i:例如」］［b:「b:
+                ```c++
+                std::chrono::duration&lt;double, std::milli&gt; dur(1.5);
+                std::cout &lt;&lt; dur.count() &lt;&lt; std::endl; 
+                // 输出结果为 1.5
+                ```
+            」］
+
+            ②能否输出到流、结果的格式：［i:可以（C++20）；结果的格式为`时间间隔数值[num/den]s`，当`den`为 1 时会省略，当`num/den`为常用的时间精度时`[num/den]s`会用相应的时间单位符号代替；「i:例如」］［b:「b:
+                ```c++
+                using std::chrono::duration;
+
+                std::cout 
+                    &lt;&lt; duration&lt;int, std::ratio&lt;30>>(1) // 1[30]s
+                    &lt;&lt; duration&lt;int, std::ratio&lt;60>>(1) // 1min
+                    &lt;&lt; duration&lt;int, std::ratio&lt;1>>(1) // 1s
+                    &lt;&lt; duration&lt;int, std::ratio&lt;1, 30>>(1) // 1[1/30]s
+                    &lt;&lt; duration&lt;int, std::ratio&lt;1, 1000>>(1) // 1ms
+                    &lt;&lt; std::endl;
+                ```
+            」］
+
+
+        3) 时间间隔类型的隐式/自动类型转换：
+            ①隐式类型转换规则：［i:只要满足以下条件，编译器就能自动完成类型转换、无需用户干预<br>
+                &emsp;&nbsp;a. 时间间隔数值类型（第一个模板参数 Rep 指定的类型）从整型到浮点型或浮点型到浮点型，无论时间精度如何；<br>
+                &emsp;&nbsp;b. 时间间隔数值类型都是整数类型时，时间精度（第二个模板参数 Period 指定的类型）只能由粗到细、且粗时间精度能被细时间精度整除；
+                「i:例如」
+            ］［b:「b:
+                ```c++
+                using std::chrono::duration;
+                using namespace std::chrono_literals;
+
+                // 1) 时间间隔数值类型从整型到浮点型、无论时间精度如何
+                // a. 精度变细且能整除（整数时辰到浮点小时、整数小时到浮点分钟、整数微秒到浮点毫秒）
+                duration&lt;float, std::ratio&lt;3600>> h_2f = duration&lt;long, std::ratio&lt;7200>>(1);
+                duration&lt;double, std::ratio&lt;60>> min_60f = 1h;
+                duration&lt;double, std::micro> us_1000f = 1ms;
+                
+                // b. 精度变细但不能整除（整数个"一时三刻"到浮点小时、整数个一秒半到浮点秒）
+                duration&lt;double, std::ratio&lt;3600>> h_2_75f = duration&lt;long, std::ratio&lt;9900>>(1);
+                duration&lt;float, std::ratio&lt;1>> s_1_5f = duration&lt;int, std::ratio&lt;3, 2&gt;&gt;(1);
+
+                // c. 精度变粗（整数刻钟到浮点时辰、整数秒到浮点分钟、整数毫秒到浮点秒）
+                duration&lt;double, std::ratio&lt;7200>> shichen_1f = duration&lt;int, std::ratio&lt;900>>(8);
+                duration&lt;double, std::ratio&lt;60>> min_1_5f = 90s;
+                duration&lt;double, std::ratio&lt;1>> s_2_5f = 2500ms;
+
+                std::cout &lt;&lt; h_2f.count() &lt;&lt; "\n" 
+                    &lt;&lt; min_60f.count() &lt;&lt; "\n"
+                    &lt;&lt; us_1000f.count() &lt;&lt; "\n"
+                    &lt;&lt; h_2_75f.count() &lt;&lt; "\n"
+                    &lt;&lt; s_1_5f.count() &lt;&lt; "\n"
+                    &lt;&lt; shichen_1f.count() &lt;&lt; "\n"
+                    &lt;&lt; min_1_5f.count() &lt;&lt; "\n"
+                    &lt;&lt; s_2_5f.count()
+                    &lt;&lt; std::endl;
+
+                // 2) 时间间隔数值类型从浮点型到浮点型、无论时间精度如何
+                // a. 精度变细且能整除（浮点时辰到浮点小时、浮点小时到浮点分钟、浮点微秒到浮点毫秒）
+                duration&lt;float, std::ratio&lt;3600>> h_3f = duration&lt;float, std::ratio&lt;7200>>(1.5);
+                duration&lt;double, std::ratio&lt;60>> min_90f = 1.5h;
+                duration&lt;double, std::micro> us_1500f = 1.5ms;
+                
+                // b. 精度变细但不能整除（小数个"一时三刻"到浮点小时、小数个一秒半到浮点秒）
+                duration&lt;double, std::ratio&lt;3600>> h_4_125f = duration&lt;float, std::ratio&lt;9900>>(1.5);
+                duration&lt;float, std::ratio&lt;1>> s_2_25f = duration&lt;double, std::ratio&lt;3, 2&gt;&gt;(1.5);
+
+                // c. 精度变粗（浮点刻钟到浮点时辰、浮点秒到浮点分钟、浮点毫秒到浮点秒）
+                duration&lt;double, std::ratio&lt;7200>> shichen_1_0625f = duration&lt;float, std::ratio&lt;900>>(8.5);
+                duration&lt;double, std::ratio&lt;60>> min_0_025f = 1.5s;
+                duration&lt;double, std::ratio&lt;1>> s_1_1115f = 1111.5ms;
+
+                std::cout &lt;&lt; h_3f.count() &lt;&lt; "\n" 
+                    &lt;&lt; min_90f.count() &lt;&lt; "\n"
+                    &lt;&lt; us_1500f.count() &lt;&lt; "\n"
+                    &lt;&lt; h_4_125f.count() &lt;&lt; "\n"
+                    &lt;&lt; s_2_25f.count() &lt;&lt; "\n"
+                    &lt;&lt; shichen_1_0625f.count() &lt;&lt; "\n"
+                    &lt;&lt; min_0_025f.count() &lt;&lt; "\n"
+                    &lt;&lt; s_1_1115f.count()
+                    &lt;&lt; std::endl;
+
+                // 3) 时间间隔数值类型从整型到整型
+                // a. 精度变细且能整除（时辰到刻钟、小时到分钟、微秒到毫秒）
+                duration&lt;long, std::ratio&lt;900>> quater_8d = duration&lt;int, std::ratio&lt;7200>>(1);
+                minutes min_60d = 1h;
+                microseconds us_1000d = 1ms;
+                
+                // b. 精度变细但不能整除 - 编译失败（整数个"一时三刻"到整数个半小时、整数个一秒半到秒）
+                duration&lt;long, std::ratio&lt;1800>> h_failed = duration&lt;long, std::ratio&lt;9900>>(1);
+                duration&lt;int, std::ratio&lt;1>> s_failed = duration&lt;int, std::ratio&lt;3, 2&gt;&gt;(1);
+
+                // c. 精度变粗 - 编译失败（刻钟到时辰、秒到分钟、毫秒到秒）
+                duration&lt;int, std::ratio&lt;7200>> shichen_failed = duration&lt;int, std::ratio&lt;900>>(8);
+                duration&lt;long, std::ratio&lt;60>> min_failed = 90s;
+                duration&lt;long, std::ratio&lt;1>> s_failed = 2500ms;
+
+                std::cout &lt;&lt; quater_8d.count() &lt;&lt; "\n" 
+                    &lt;&lt; min_60d.count() &lt;&lt; "\n"
+                    &lt;&lt; us_1000d.count()
+                    &lt;&lt; std::endl;
+                ```
+            」］
+
+            ②何时发生隐式类型转换：［i:在赋值（拷贝/移动）和引用绑定时左右操作数类型不一致、且右操作数能隐式转换为左操作数时会发生隐式转换；注意在进行时间间隔类型支持的算术和比较运算时并不会发生隐式类型转换而是直接使用重载的运算符（如`operator+()`）来执行不同类型的时间间隔对象之间的计算「i:（因为与其先转换后使用重载的运算符不如直接使用重载的运算符）」，它会处理类型不一致的问题；］
+
+            ③满足隐式转换规则但时间间隔数值类型却是从宽类型到窄类型时会怎样、为什么：［i:不影响隐式类型转换，但可能会发生数据溢出，数据溢出是一个未定义行为，转换结果是不确定的，因此应尽量避免 Rep 从宽类型到窄类型的隐式转换（现代 C++ 编译器往往会给出警告）；之所以时间间隔类型有这种性质是因为这与基本数据类型由宽到窄也能发生隐式转换是一致的；「i:例如」］［b:「b:
+                ```c++
+                using std::chrono::duration;
+                using namespace std::chrono_literals;
+
+                duration&lt;int, std::milli> ms = duration&lt;long, std::ratio&lt;1>>(INT_MAX); // #include &lt;limits&gt;
+                std::cout &lt;&lt; ms.count() &lt;&lt; std::endl; // 结果是不确定的
+                ```
+                现代 C++ 编译器可能会给出以下形式的警告：
+                ```c++
+                warning: integer overflow in expression of type 'int' results in '-2147483648' [-Woverflow]
+                16 |     std::chrono::duration&lt;long long, std::ratio&lt;1>> dur5(INT_MAX + 1);
+                   |
+                ```
+            」］
+
+
+        4) 时间间隔类型的显式/强制类型转换：
+            ①何时考虑使用强制类型转换：［i:当出现以下情况时，要考虑使用强制类型转换<br>
+                &emsp;&nbsp;a. 转换不会产生数据失真，但无法使用隐式类型转换「i:（例如 1000ms 转换为 1ms）」；<br>
+                &emsp;&nbsp;b. 会产生数据失真，但误差可以忽略「i:（例如 1001ms 转换为 1s 且忽略这 1ms 对结果无影响）」；<br>
+                &emsp;&nbsp;c. 需要主动取整时，如向上取整、向下取整、截断取整、四舍五入「i:（例如 1.3s 向下取整为 1s）」；
+            ］
+
+            ②强制类型转换的各种方式：［i:可以通过`duration_cast&lt;&gt;()`、`floor&lt;&gt;()`、`ceil&lt;&gt;()`、`round&lt;&gt;()`进行显式类型转换（std::chrono 命名空间），分别表示截断取整、向下取整、向上取整、四舍五入，其典型语法格式为］
+            ［b:
+                ```c++
+                目标类型 新对象 = duration_cast&lt;目标类型&gt;(原类型时间间隔对象);
+                目标类型 新对象 = ceil&lt;目标类型&gt;(原类型时间间隔对象);
+                目标类型 新对象 = floor&lt;目标类型&gt;(原类型时间间隔对象);
+                目标类型 新对象 = round&lt;目标类型&gt;(原类型时间间隔对象);
+                ```
+                「i:例如」「b:
+                ```c++
+                using namespace std::chrono;
+                using namespace std::chrono_literals;
+
+                minutes min_61  =  61min;
+                minutes min_n61 = -61min;
+                minutes min_59  =  59min;
+                minutes min_n59 = -59min;
+                minutes min_90  =  90min;
+                minutes min_n90 = -90min;
+
+                hours h11 = duration_cast&lt;hours&gt;(min_61); // 1h
+                hours h12 = floor&lt;hours&gt;(min_61); // 1h 
+                hours h13 = ceil&lt;hours&gt;(min_61); // 2h
+                hours h14 = round&lt;hours&gt;(min_61); // 1h
+
+                hours h21 = duration_cast&lt;hours&gt;(min_59); // 0h
+                hours h22 = floor&lt;hours&gt;(min_59); // 0h 
+                hours h23 = ceil&lt;hours&gt;(min_59); // 1h
+                hours h24 = round&lt;hours&gt;(min_59); // 1h 
+
+                hours h31 = duration_cast&lt;hours&gt;(min_90); // 1h
+                hours h32 = floor&lt;hours&gt;(min_90); // 1h 
+                hours h33 = ceil&lt;hours&gt;(min_90); // 2h
+                hours h34 = round&lt;hours&gt;(min_90); // 2h 
+
+                hours h41 = duration_cast&lt;hours&gt;(min_n61); // -1h
+                hours h42 = floor&lt;hours&gt;(min_n61); // -2h 
+                hours h43 = ceil&lt;hours&gt;(min_n61); // -1h
+                hours h44 = round&lt;hours&gt;(min_n61); // -1h 
+
+                hours h51 = duration_cast&lt;hours&gt;(min_n59); // 0h
+                hours h52 = floor&lt;hours&gt;(min_n59); // -1h
+                hours h53 = ceil&lt;hours&gt;(min_n59); // 0h
+                hours h54 = round&lt;hours&gt;(min_n59); // -1h 
+
+                hours h61 = duration_cast&lt;hours&gt;(min_n90); // -1h
+                hours h62 = floor&lt;hours&gt;(min_n90); // -2h
+                hours h63 = ceil&lt;hours&gt;(min_n90); // -1h
+                hours h64 = round&lt;hours&gt;(min_n90); // -2h
+                
+                std::cout &lt;&lt; std::boolalpha
+                    &lt;&lt; (h11 == 1h && h12 == 1h && h13 == 2h && h14 == 1h) &lt;&lt; " "
+                    &lt;&lt; (h21 == 0h && h22 == 0h && h23 == 1h && h24 == 1h) &lt;&lt; " "
+                    &lt;&lt; (h31 == 1h && h32 == 1h && h33 == 2h && h34 == 2h) &lt;&lt; " "
+                    &lt;&lt; (h41 == -1h && h42 == -2h && h43 == -1h && h44 == -1h) &lt;&lt; " "
+                    &lt;&lt; (h51 ==  0h && h52 == -1h && h53 == 0h  && h54 == -1h) &lt;&lt; " "
+                    &lt;&lt; (h61 == -1h && h62 == -2h && h63 == -1h && h64 == -2h) &lt;&lt; " "
+                    &lt;&lt; std::endl;
+                ```
+            」］
+            
+        5) 时间间隔类型支持的运算：
+            ①是否允许负的时间间隔：［i: 允许；「i:例如」］［b:「b:
+                ```c++
+                using std::chrono::duration;
+                
+                duration&lt;long, std::ratio&lt;1&gt;&gt; dur1(1);
+                duration&lt;double, std::milli&gt; dur2(1.5);
+                auto dur3 = dur2 - dur1;
+                
+                std::cout &lt;&lt; std::boolalpha &lt;&lt; std::is_same&lt;decltype(dur3), std::chrono::duration&lt;double, std::milli&gt;&gt;::value &lt;&lt; std::endl;
+                std::cout &lt;&lt; dur3.count() &lt;&lt; std::endl; 
+                // 输出结果为 true、-998.5
+                ```
+            」］
+
+            ②支持算术运算么、左右类型和含义：［i:支持；各自的规则和含义如下<br>
+                &emsp;&nbsp;a. 加法：支持两个时间间隔对象的加法运算，含义为求两段时间间隔之和；<br>
+                &emsp;&nbsp;b. 减法：支持两个时间间隔对象的减法运算，含义为求两段时间间隔之差；<br>
+                &emsp;&nbsp;c. 乘法：支持时间间隔对象与数字类型（如 int, double 等）的乘法运算，含义为求一段时间间隔的多少倍；<br>
+                &emsp;&nbsp;d. 除法：支持两个时间间隔对象的除法运算，含义为求一个时间间隔是另一个时间间隔的多少倍；<br>
+                &emsp;&nbsp;e. 取余：支持两个时间间隔对象的取余运算，含义为求一个时间间隔相对另一个时间间隔的余数；
+                「i:例如」
+            ］［b:「b:
+                ```c++
+                using std::chrono::duration;
+                using namespace std::chrono_literals;
+
+                // 加法和减法
+                duration&lt;double, std::milli&gt; dur1(1.5);
+                duration&lt;double, std::milli&gt; dur2(2.5);
+                duration&lt;double, std::milli&gt; dur3 = dur1 + dur2;
+                duration&lt;double, std::milli&gt; dur4 = dur2 - dur1;
+                
+                std::cout &lt;&lt; dur3.count() &lt;&lt; std::endl; // 输出结果为 4
+                std::cout &lt;&lt; dur4.count() &lt;&lt; std::endl; // 输出结果为 1
+
+                // 乘法、除法
+                auto dur5 = 1h * 2;
+                auto n =  90min / 10min; 
+                std::cout &lt;&lt; dur5.count() &lt;&lt; std::endl; // 2
+                std::cout &lt;&lt; n &lt;&lt; std::endl; // 9
+
+                // 取余
+                auto dur6 = 36min % 10min;
+                std::cout &lt;&lt; dur6.count() &lt;&lt; std::endl; // 输出结果为 6，代表 6 分钟
+                ```
+            」］
+
+            ③支持比较运算么、左右类型和含义：［i:支持；支持两个时间间隔对象的比较运算，含义为比较两个时间间隔谁长谁短、是否相等或不等；「i:例如」
+            ］［b:「b:
+                ```c++
+                using namespace std::chrono_literals;
+
+                std::cout &lt;&lt; std::boolalpha 
+                    &lt;&lt; (10min >  1min) // true 
+                    &lt;&lt; (10min &lt;  1min) // false 
+                    &lt;&lt; (10min >= 1min) // true 
+                    &lt;&lt; (10min &lt;= 1min) // false 
+                    &lt;&lt; (10min == 1min) // false 
+                    &lt;&lt; (10min != 1min) // true 
+                    &lt;&lt; std::endl;
+                ```
+            」］
+
+            ④左右操作数类型不一致则：［i:重载的算术和比较运算符会通过 common_type 机制寻找时间间隔数值类型 Rep 和精度类型 Period 的“最大公约类型”（当然，对于重载的乘法运算符则只会寻找 Rep 和乘数的“最大公约类型”），然后对于算术运算返回“最大公约类型”的结果，对于比较运算则先将左右操作数转换为“最大公约类型”再对时间间隔数值（即`count()`方法的返回值）做比较；<br>
+            ▲注意：这与基本数据类型不同，并不是先做隐式类型转换将左右操作数类型统一再做算术或比较运算；原因是重载的算术和比较运算符要求左右操作数可以不必是同一时间间隔类型，先隐式转换为同一类型再使用重载的这些运算符是画蛇添足完全没有必要的；「i:例如」］［b:「b:
+                ```c++
+                using std::chrono::duration;
+                using namespace std::chrono_literals;
+
+                duration&lt;float, std::ratio&lt;1>> dur1(1.5);
+                duration&lt;int, std::ratio&lt;1>> dur2(2);
+                
+                duration&lt;long, std::ratio&lt;1&gt;&gt; dur3(1);
+                duration&lt;double, std::milli&gt; dur4(1.5);               
+                
+                auto dur5 = dur1 + dur2;
+                std::cout &lt;&lt; std::boolalpha &lt;&lt; std::is_same_v&lt;decltype(dur5), duration&lt;float, std::ratio&lt;1>>> &lt;&lt; std::endl; // true，float 和 int 的最大公约类型为 float
+                std::cout &lt;&lt; dur5.count() &lt;&lt; std::endl; // 3.5
+
+                auto dur6 = dur3 + dur4;
+                std::cout &lt;&lt; std::boolalpha &lt;&lt; std::is_same&lt;decltype(dur6), std::chrono::duration&lt;double, std::milli&gt;&gt;::value &lt;&lt; std::endl; // true，long 和 double 的最大公约类型为 double，std::ratio&lt;1&gt; 和 std::milli 的最大公约类型为 std::milli
+                std::cout &lt;&lt; dur6.count() &lt;&lt; std::endl; 
+
+                auto dur7 = 1h + 10min;
+                std::cout &lt;&lt; std::boolalpha &lt;&lt; std::is_same_v&lt;decltype(dur7), minutes> &lt;&lt; std::endl; // true，std::ratio&lt;3600> 和 std::ratio&lt;60> 的最大公约类型为精度更高的 std::ratio&lt;60>
+                std::cout &lt;&lt; dur7.count() &lt;&lt; std::endl; // 70
+                
+                auto dur8 = 1h * 1.5;
+                std::cout &lt;&lt; std::boolalpha &lt;&lt; std::is_same_v&lt;decltype(dur8), duration&lt;double, std::ratio&lt;3600>>> &lt;&lt; std::endl; // true，整型和 double 的最大公约类型为 double 
+                std::cout &lt;&lt; dur8.count() &lt;&lt; std::endl; // 1.5
+
+                auto dur9 = 1.5h + 10min;
+                std::cout &lt;&lt; std::boolalpha &lt;&lt; std::is_same_v&lt;decltype(dur9), duration&lt;double, std::ratio&lt;60>>> &lt;&lt; std::endl; // true，由于 1.5h 的 Rep 为 double、Period 为 std::ratio&lt;3600&gt;，10min 的 Rep 为整型、Period 为 std::ratio&lt;60>，所以 Rep 的最大公约类型为 double、Period 的最大公约类型为 std::ratio&lt;60>
+                std::cout &lt;&lt; dur9.count() &lt;&lt; std::endl; // 100.0
+                
+                auto dur10 = 1h * 1.5 + 10min;
+                std::cout &lt;&lt; std::boolalpha &lt;&lt; std::is_same_v&lt;decltype(dur10), duration&lt;double, std::ratio&lt;60>>> &lt;&lt; std::endl; // true，对于其中的乘法运算，Rep 的最大公约类型为 double；对于其中的加法运算，Rep 的最大公约类型为 double，Period 的最大公约类型为 std::ratio&lt;60>
+                std::cout &lt;&lt; dur10.count() &lt;&lt; std::endl; // 100.0
+
+                auto dur11 = 1h * 1.5 % 10min;
+                // 编译失败，1h * 1.5 的时间间隔类型为 double，不能进行取余运算
+                ```
+                ```c++
+                using duration = std::chrono::duration;
+                using namesapce std::chrono_literals;
+
+                duration&lt;float, std::ratio&lt;3600>> dur1(1.0f);
+                duration&lt;int, std::ratio&lt;60>> dur2(61);
+                
+                bool ret1 = (dur1 >= dur2); // dur1 和 dur2 会先转换为它们的最大公约类型 duration&lt;float, std::ratio&lt;60>>，然后进行数值比较 60.0f >= 61.0f
+                bool ret2 = (1h == 60min); // 1h 和 60min 会先转换为它们的最大公约类型 duration&lt;int, std::ration&lt;60&gt;&gt;，然后进行数值比较 60 == 60
+                bool ret3 = (1.5h == 90min); // 1.5h 和 90min 会先转换为它们的最大公约类型 duration&lt;double, std::ration&lt;60&gt;&gt;，然后进行数值比较 90.0f == 90.0f
+
+                std::cout &lt;&lt; std::boolalpha 
+                    &lt;&lt; ret1 &lt;&lt; " " // false 
+                    &lt;&lt; ret2 &lt;&lt; " " // true 
+                    &lt;&lt; ret3 &lt;&lt; " " // true 
+                    &lt;&lt; std::endl;
+                ```
+            」］
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+
+
+            
+
+            
+
+        <h3>4. 时间点类型</h3>
+        1) 时间点类型的基本概念、定义与基本操作：
+            ①定义和初始化时间点类型对象：［i:定义时间点类型的语法格式为（方便起见，时间点类型和时钟类型都省略了命名空间`std::chrono`）］［b:
+                ```c++
+                time_point&lt;时钟类型, 时间间隔类型&gt; tp;
+                time_point&lt;时钟类型&gt; tp;
+                time_point&lt;时钟类型, 时钟类型::duration&gt; tp;
+                // 时钟类型即三种时钟类型 system_clock、steady_clock、high_resolution_clock
+                // 时间间隔类型用于指定时间点对象使用的时间数值类型和时间精度（单位） 
+                // 当需要使用时钟类型的时间数值类型和时间精度时，第二个模板参数时间间隔类型可省略，即以上第二行语句，它的完整形式为第三行语句
+                // 这里为了方便起见省略了时间点类型和时钟类型的命名空间限定 std::chrono
+                ```
+                一般使用对应的时钟类型的工厂函数`now()`进行初始化，典型语法格式为
+                ```c++
+                时间点类型 tp = 对应的时钟类型::now();
+                ```
+                由于`now()`返回一个右值时间点对象，所以调用的构造函数是移动构造函数；「i:例如」「b:
+                ```c++
+                using namespace std::chrono;
+
+                time_point&lt;system_clock&gt; tp1 = system_clock::now();
+                time_point&lt;system_clock, system_clock::duration&gt; tp2 = system_clock::now();
+                time_point&lt;steady_clock, milliseconds&lt;&gt; tp3 = time_point_cast&lt;milliseconds>(steady_clock::now()); // 需要做转换，原因详见后文类型转换部分
+                time_point&lt;high_resolution_clock, duration&lt;double, std::micro>> tp4 = high_resolution_clock::now();
+                ```
+                」
+            ］
+
+            ②时间点类型的完整声明：［b:
+                ```c++
+                template &lt;class Clock, class Duration = typename Clock::duration&gt;
+                class time_point;
+                // 其中 typename 告诉编译器把 Clock::duration 当成一个类型而不是静态成员
+                // Duration 用于指定时间间隔数值类型和时间精度（单位）
+                ```
+            ］
+
+            ③xxx_clock::time_point 是什么：［i:本质是以下类型］［b:
+                ```c++
+                time_point&lt;xxx_clock&gt; // 省略 Duration 
+                time_point&lt;xxx_clock, xxx_clock::duration&gt; // 完整写法
+                ```
+                「b:例如对于`system_clock::time_point`，就是
+                ```c++
+                time_point&lt;system_clock&gt; // 省略 Duration 
+                time_point&lt;system_clock, system_clock::duration&gt; // 完整写法 
+                ```
+                类型，实现原理如下
+                ```c++
+                namespace std::chrono {
+                    class system_clock {
+                        using Rep = long long;
+                        using Period = std::ratio&lt;1, 10000000&gt;
+                        using duration = nanoseconds;
+                        using time_point = time_point&lt;system_clock, duration&gt;
+                        ...
+                    };
+                }
+                ```
+                因此，也可以在定义和初始化 time_point 对象时直接使用此别名，例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    system_clock::time_point tp1 = system_clock::now();
+                    steady_clock::time_point tp2 = steady_clock::now();
+                    high_resolution_clock::time_point tp3 = high_resolution_clock::now();
+
+                    // 它们的本质是
+                    time_point&lt;system_clock&gt; tp1 = system_clock::now();
+                    time_point&lt;steady_clock&gt; tp2 = steady_clock::now();
+                    time_point&lt;high_resolution_clock&gt; tp3 = high_resolution_clock::now();
+                    ```
+                」
+            ］
+
+            ④输出到流(C++20)、应用场景：［i:结果的格式为`yyyy-mm-dd hh:MM::ss`，例如`2020-01-01 12:01:01`；应用场景就是结合字符串流可以免格式化获取日期时间字符串；「i:例如」］［b:「b:
+                ```c++
+                using namespace std::chrono;
+
+                time_point&lt;system_clock&gt; tp = system_clock::now();
+                
+                // 直接面格式化输出到标准输出
+                std::cout &lt;&lt; tp &lt;&lt; std::endl;
+
+                // 利用字符串流将日期时间保存为字符串、然后对该字符串做进一步处理（以输出到标准输出为例）
+                std::stringstream ss;
+                std::string buf;
+                ss &lt;&lt; tp;
+                ss >> buf;
+                std::cout &lt;&lt; buf &lt;&lt; std::endl; 
+                ```
+            」］
+
+            ⑤从时间点对象获取时间戳、本质：［i:通过`time_since_epoch()`方法，其本质为返回一个新的时间点对象，只是在输出到流时其格式为当前时间精度的时间戳形式 (C++20)；「i:例如」］［b:「b:
+                ```c++
+                time_point&lt;system_clock, seconds&gt; tp = time_point_cast&lt;seconds&gt;(system_clock::now());
+        
+                // 直接打印到标准输出(C++20)
+                std::cout &lt;&lt; tp.time_since_epoch() &lt;&lt; std::endl;
+                        
+                // 利用字符串流输出到指定缓冲区并做进一步处理(C++20)
+                std::stringstream ss;
+                std::string buf;
+                ss &lt;&lt; tp.time_since_epoch();
+                ss &gt;&gt; buf;
+                buf.erase(buf.end() - 1); // 删除最后两个做为秒单位的字符's'
+                std::cout &lt;&lt; buf &lt;&lt; std::endl;
+
+                /* 
+                    输出结果示例： 
+                    tp0: 1769796368s
+                    tp1: 1769796368
+                */
+                ```
+            」］
+
+
+        2) 时间点类型的类型转换：
+            ①能否跨时钟类型做类型转换：［i:不能；无论是隐式转换还是显式转换；］
+
+            ②隐式类型转换规则：［i:一类型 time_point 对象能隐式转换为另一类型 time_point 对象需满足<br>
+                &emsp;&nbsp;a. Clock 时钟类型必须一致；<br>
+                &emsp;&nbsp;b. Duration 时间间隔类型能完成隐式类型转换；「i:例如」］［b:「b:
+                ```c++
+                using namespace std::chrono;
+
+                time_point&lt;system_clock, milliseconds&gt; tp1 = system_clock::now(); // 失败，system_clock 的时间精度为纳秒或百纳秒，无法隐式转换为更粗的毫秒精度的时间点
+                time_point&lt;system_clock, milliseconds&gt; tp2 = time_point&lt;system_clock, microseconds&gt;(); // 失败，微秒精度的时间点无法隐式转换为更粗的毫秒精度的时间点
+                time_point&lt;system_clock, microseconds&gt; tp3 = time_point&lt;system_clock, milliseconds&gt;(); // 成功，毫秒精度的时间点可以隐式转换为更细的毫秒精度的时间点
+                time_point&lt;system_clock, microseconds&gt; tp4 = time_point&lt;steady_clock, milliseconds&gt;(); // 失败，无法跨时钟类型做隐式转换
+                ```
+            」］
+
+            ③何时发生隐式类型转换：［i:在赋值（拷贝/移动）和引用绑定时左右操作数类型不一致、且右操作数能隐式转换为左操作数时会发生隐式转换；注意在进行时间点类型之间和与时间间隔类型的算术和比较运算时并不会发生隐式类型转换而是直接使用重载的运算符（如`operator+()`）来执行不同类型的时间间隔对象之间的计算「i:（因为与其先转换后使用重载的运算符不如直接使用重载的运算符）」，它会处理类型不一致的问题；］
+
+            ④何时考虑使用强制类型转换：［i:当出现以下情况时，要考虑使用强制类型转换<br>
+                &emsp;&nbsp;a. 转换不会产生数据失真，但无法使用隐式类型转换「i:（例如 1000ms 转换为 1ms）」；<br>
+                &emsp;&nbsp;b. 会产生数据失真，但误差可以忽略「i:（例如 1001ms 转换为 1s 且忽略这 1ms 对结果无影响）」；<br>
+                &emsp;&nbsp;c. 需要主动取整时，如向上取整、向下取整、截断取整、四舍五入「i:（例如 1.3s 向下取整为 1s）」；
+            ］
+
+            ⑤强制类型转换的各种方式：［i:可以通过`time_point_cast&lt;&gt;()`、`floor&lt;&gt;()`、`ceil&lt;&gt;()`、`round&lt;&gt;()`进行显式类型转换（std::chrono 命名空间），分别表示截断取整、向下取整、向上取整、四舍五入，其典型语法格式为］
+            ［b:
+                ```c++
+                目标时间点类型 新对象 = time_point_cast&lt;对应的时间间隔类型&gt;(源时间点对象);
+                目标时间点类型 新对象 = floor&lt;对应的时间间隔类型&gt;(源时间点对象);
+                目标时间点类型 新对象 = ceil&lt;对应的时间间隔类型&gt;(源时间点对象);
+                目标时间点类型 新对象 = round&lt;对应的时间间隔类型&gt;(源时间点对象);
+                ```
+                「i:例如」「b:
+                ```c++
+                using namespace std::chrono;
+
+                time_point&lt;system_clock, microseconds> tp1 = time_point_cast&lt;microseconds&gt;(system_clock::now()); // 成功，但可能会产生数据失真 
+                time_point&lt;system_clock, milliseconds&gt; tp2 = time_point_cast&lt;milliseconds>(tp1); // 成功，但可能会产生数据失真
+                time_point&lt;steady_clock, milliseconds&gt; tp3 = time_point_cast&lt;milliseconds>(tp1); // 失败，不可以跨时钟类型做显示转换
+
+                time_point&lt;system_clock, milliseconds> tp4 = floor&lt;milliseconds>(tp1); // 成功，但可能会产生数据失真
+                time_point&lt;system_clock, milliseconds> tp5 = ceil&lt;milliseconds>(tp1); // 成功，但可能会产生数据失真
+                time_point&lt;system_clock, milliseconds> tp6 = round&lt;milliseconds>(tp1); // 成功，但可能会产生数据失真
+
+                std::cout &lt;&lt; "tp1:\t" &lt;&lt; tp1.time_since_epoch() &lt;&lt; "\n"
+                    &lt;&lt; "floor:\t" &lt;&lt; tp4.time_since_epoch() &lt;&lt; "\n"
+                    &lt;&lt; "ceil:\t" &lt;&lt; tp5.time_since_epoch() &lt;&lt; "\n"
+                    &lt;&lt; "round:\t" &lt;&lt; tp6.time_since_epoch() &lt;&lt; "\n"
+                    &lt;&lt; std::endl;
+
+                /*
+                    输出结果示例：
+                    tp1:    1769792514665388us
+                    floor:  1769792514665ms
+                    ceil:   1769792514666ms
+                    round:  1769792514665ms
+                */
+                ```
+                」
+            ］
+
+        
+        3) 支持的运算与意义：
+            ①时间点对象之间的算术运算：［i:time_point 时间点对象之间仅支持减法运算，表示求两个时间点之间的时间间隔，得到表示该时间间隔的 duration 对象；「i:例如」］［b:「b:
+                ```c++
+                // 测量打印 1000 次指定字符串消耗的时间
+                std::chrono::time_point&lt;std::chrono::steady_clock&gt; tp1 = std::chrono::steady_clock::now();
+                for (int i = 0; i &lt; 1000; ++i) {
+                    std::cout &lt;&lt; "Hello world!" &lt;&lt; std::endl;
+                }
+                std::chrono::time_point&lt;std::chrono::steady_clock&gt; tp2 = std::chrono::steady_clock::now();
+
+                std::chrono::nanoseconds dur{tp2 - tp1};
+                std::cout &lt;&lt; tp2.count() &lt;&lt; "ns" &lt;&lt; std::endl;
+                ```
+            」］
+
+            ②时间点对象之间的比较运算：［i:支持`>, &lt;, ==, >=, &lt;=, !=`运算，表示比较两个时间点谁早谁晚以及是否相等；「i:例如」］［b:「b:
+                ```c++
+                // 测试时钟稳定性的简单小程序
+                #include &lt;iostream&gt;
+                #include &lt;chrono&gt;
+                #include &lt;windows.h&gt;
+
+                int main(int argc, char** argv) 
+                {
+                    using std::chrono::system_clock;
+                    using std::chrono::steady_clock;
+                    using std::chrono::time_point;
+                    
+                    // 获取修改系统本地时间前的时间点
+                    time_point&lt;system_clock&gt; tp0_sys = system_clock::now();
+                    time_point&lt;steady_clock&gt; tp0_ste = steady_clock::now();
+
+                    // 修改系统时间为昨天的某一时刻（在设置中修改、修改完成后按下输入任意字符并按下回车继续）
+                    std::string buf;
+                    std::cin &gt;&gt; buf;
+
+                    // 获取修改系统本地时间后的时间点
+                    time_point&lt;system_clock&gt; tp_sys = system_clock::now();
+                    time_point&lt;steady_clock&gt; tp_ste = steady_clock::now();
+
+                    // 输出结果 
+                    std::cout &lt;&lt; "system_clock " 
+                            &lt;&lt; (tp_sys &gt; tp0_sys ? "is " : "is not ")
+                            &lt;&lt; "steady!"
+                            &lt;&lt; std::endl;
+
+                    std::cout &lt;&lt; "steady_clock " 
+                            &lt;&lt; (tp_ste &gt; tp0_ste ? "is " : "is not ")
+                            &lt;&lt; "steady!"
+                            &lt;&lt; std::endl;
+
+                    // 别忘了在设置中恢复系统时间
+
+                    return 0;    
+                }
+                ```
+            」］
+
+            ③与时间间隔对象的算术运算：［i:time_point 时间点对象与 duration 时间间隔对象之间仅支持加减运算，表示计算一个时间点推迟或回退指定时间间隔之后对应的时间点，返回该代表该时间点的 time_point 时间点对象；「i:例如」］［b:「b:
+                ```c++
+                using namespace std::chrono;
+                using namespace std::chrono_literals;
+
+                time_point&lt;system_clock, seconds> tp0 = time_point_cast&lt;seconds&gt;(system_clock::now());
+                time_point&lt;system_clock, seconds> tp1 = tp0 + 5s; 
+
+                std::cout &lt;&lt; "tp0: " &lt;&lt; tp0.time_since_epoch() &lt;&lt; "\n"
+                    &lt;&lt; "tp1: " &lt;&lt; tp1.time_since_epoch() &lt;&lt; std::endl;
+
+                /*
+                    输出结果示例：
+                    tp0: 1769794611s
+                    tp1: 1769794616s
+                */
+                ```
+            」］
+
+            ④对于以上运算、左右操作数的 Duration 类型不一致时会怎样：［i:重载的算术和比较运算符会通过 common_type 机制寻找两个时间点对象对应的时间间隔类型的时间间隔数值类型 Rep 和精度类型 Period 的“最大公约类型”，然后对于算术运算返回“最大公约类型”的结果，对于比较运算则先将左右操作数转换为“最大公约类型”再对时间点数值做比较；<br>
+            ▲注意：这与基本数据类型不同，并不是先做隐式类型转换将左右操作数类型统一再做算术或比较运算；原因是重载的算术和比较运算符要求左右操作数可以不必是同一时间间隔类型，先隐式转换为同一类型再使用重载的这些运算符是画蛇添足完全没有必要的；「i:例如」］［b:「b:
+                ```c++
+                using namespace std::chrono;
+                using namespace std::chrono_literals;
+
+                // 0) 获取当前以毫秒和秒为单位的时间戳，秒时间戳数值类型为浮点型
+                time_point&lt;system_clock, milliseconds&gt; tp1 = time_point_cast&lt;milliseconds&gt;(system_clock::now());
+                time_point&lt;system_clock, duration&lt;float, std::ratio&lt;1&gt;&gt;&gt; tp2 = time_point_cast&lt;milliseconds&gt;(system_clock::now());
+
+                // 1) 与时间点类型的减法运算中两个时间点对象的 Duration 类型不一致时
+                auto dur = tp2 - tp1;
+                static_assert(
+                    std::is_same_v&lt;decltype(dur), duration&lt;float, std::milli&gt;&gt;
+                    // 假设是隐式转换规则，则 dur 类型为 duration&lt;float, std::ratio&lt;1&gt;&gt;
+                    // 但实际上直接调用重载的减法运算符，内部会通过 common_type 机制寻找 Duration 的 Rep 和 Period 的最大公约类型，对于 duration&lt;float, std::ratio&lt;1&gt;&gt; 和 milliseconds，Rep 的最大公约类型为 float，Period 的最大公约类型为 std::milli，所以最后 dur 为 durtion&lt;float, std::milli&gt;类型
+                );
+
+                // 2) 与时间间隔类型的加法运算（减法同理）中时间点对象的 Duration 与加数/减数类型不一致时
+                auto tp3 = tp1 + duration&lt;float, std::ratio&lt;1&gt;&gt;(1); // 当前时间推迟 1s
+                static_assert(
+                    std::is_same_v&lt;decltype(tp3), time_point&lt;system_clock, duration&lt;float, std::milli&gt;&gt;&gt;
+                    // 假设是隐式转换规则，则 tp1 的 Duration 类型为 duration&lt;float, std::ratio&lt;1&gt;&gt;
+                    // 但实际上直接调用重载的加法运算符，内部会通过 common_type 机制寻找 Duration 的 Rep 和 Period 的最大公约类型，对于 duration&lt;float, std::ratio&lt;1&gt;&gt; 和 milliseconds，Rep 的最大公约类型为 float，Period 的最大公约类型为 std::milli，所以最后 tp3 的 Duration 为 durtion&lt;float, std::milli&gt;类型
+                );
+                ```
+            」］
+
+
+
+
+
+
+
+
+
+
+
+
+        6) C++20 引入的日期处理 API：
+
+            ③月/Weekday 的预定义对象：［b:
+                ```c++
+                // std::chrono::month
+                January、February、March、April、May、June、July、August、September、October、November、December
+
+                // std::chrono::weekday
+                Monday、Tuesday、Wednesday、Thursday、Friday、Saturday、Sunday
+                ```
+            ］
+
+            ④使用以上预定义值的注意点：［b:
+                ```c++
+                // 1. 使用带有后缀的用户自定义字面量，缺点是写起来麻烦
+                // a. 添加 std::chrono_literals:: 前缀，例如
+                std::chrono_literals::12d
+                std::chrono_literals::1970y  
+                
+                // b. 只引入当前作用域要使用的用户定义字面量，但需要注意命名冲突问题，例如
+                using std::chrono_literals::12d;
+                using std::chrono_literals::1970y;
+
+                // c. 直接展开 chrono 和 chrono_literals 命名空间，但需要避免歧义问题，即
+                using namespace std::chrono;
+                using namespace std::chrono_literals;
+
+
+                // 2. 使用预定义的月份和 weekday 对象 
+                // a. 添加 std::chrono:: 前缀，例如
+                std::chrono::January
+                std::chrono::Monday  
+                
+                // b. 只引入当前作用域要使用的用户定义字面量，但需要注意命名冲突问题，例如
+                using std::chrono::January;
+                using std::chrono::Monday;
+
+                // c. 直接展开 chrono 和 chrono_literals 命名空间，但需要避免歧义问题，即
+                using namespace std::chrono;
+                using namespace std::chrono_literals;
+                ```
+            ］
+
+            ⑤weekday_indexed 类型与对象定义：［i:其对象表示一月中第几个此 Weekday；常用的对象定义方式有以下两种（除此之外还支持默认构造、拷贝构造、其他可能的格式的移动构造）］［b:
+                ```c++
+                using namespace std::chrono;
+
+                weekday_indexed wd(weekday对象, 索引1~4); // 有参构造
+                weekday_indexed wd(预定义的weekday对象[索引1~4]); // 通过预定义的 weekday 对象和重载的“[]”运算符得到一个 weekday_indexed、然后通过移动构造函数构造一个新的 weekday_indexed 对象
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    weekday_indexed wd1(weekday(2), 1); // 一个月中的第一个星期二 
+                    weekday_indexed wd2(Monday[2]); // 一个月中的第二个星期一
+                    ```    
+            」］
+
+            ⑥year_month 类型与对象定义：［i:其对象表示年与月的组合日期（如 1970 年 1 月）；常用的对象定义方式有以下两种（除此之外还支持默认构造、拷贝构造、其他可能的格式的移动构造）］［b:
+                ```c++
+                using namespace std::chrono;
+
+                // 1. 有参构造 
+                year_month ym(year对象, month对象); // 有参构造
+                
+                // 2. 先通过 year 对象重载的“/”运算符与 month 对象组合为一个 year_month 右值对象，然后利用移动构造函数创建 year_month 对象
+                year_month ym(year对象 / month对象);
+
+                // 3. 先通过 year 对象重载的“/”运算符与一个 1~12 的整数组合为一个 year_month 右值对象，然后利用移动构造函数创建 year_month 对象
+                year_month ym(year对象 / 整数1~12); // 注意
+                ```
+                其中 year 对象可以使用用户定义字面量，month 对象可以使用预定义的对象；「i:例如」
+                「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    // 1970 年 1 月
+                    year_month ym1(year(1970), month(1)); 
+                    year_month ym2(1970y / January);
+                    year_month ym3(1970y / 1);
+                    ...
+                    ```
+                」    
+            ］
+
+            ⑦month_day 类型与对象定义：［i:其对象表示月与日的组合日期（如 1 月 1 日）；常用的对象定义方式有以下两种（除此之外还支持默认构造、拷贝构造、其他可能的格式的移动构造）］［b:
+                ```c++
+                using namespace std::chrono;
+                using namespace std::chrono_literals;
+
+                // 1. 有参构造 
+                month_day md(month对象, day对象); // 有参构造
+                
+                // 2. 先通过 month 对象重载的“/”运算符与 day 对象组合为一个 month_day 右值对象，然后利用移动构造函数创建 month_day 对象
+                month_day md(month对象 / day对象);
+
+                // 3. 先通过 month 对象重载的“/”运算符与一个 1~31 的整数组合为一个右值 month_day 对象，然后利用移动构造函数创建 month_day 对象
+                month_day md(month对象 / 整数1~31);
+                ```
+                其中 month 对象可以使用预定义的月份对象，day 对象可以使用用户定义字面量；「i:例如」
+                「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    // 1 月 1 日
+                    month_day md1(month(1), day(1)); 
+                    month_day md2(January / 1d);
+                    month_day md3(January / 1);
+                    ...
+                    ```
+                」    
+            ］
+
+            ⑧year_month_day 类型及对象定义：［i:其对象表示年月日的组合日期（如 1970 年 1 月 1 日）；常用的对象定义方式有以下两种（除此之外还支持默认构造、拷贝构造、其他可能的格式的移动构造）］［b:
+                ```c++
+                using namespace std::chrono;
+                using namespace std::chrono_literals;
+
+                // 1. 有参构造 
+                year_month_day ymd(year对象, month对象, day对象);
+                year_month_day ymd(sys_days对象);
+                year_month_day ymd(local_days对象);
+                year_month_day ymd(year_month_day_last对象);
+                
+                // 2. 先通过重载的“/”运算符将 year、month、day、month_day、year_month、纯数字组合为 year_month_day 对象，然后利用移动构造函数创建 year_month_day 对象
+                year_month_day md(各种可能的年月日组合);
+                ```
+                其中 year、month 和 day 对象都可以使用用户定义字面量或预定义的对象；「i:例如」
+                「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    // 1970 年 1 月 1 日
+                    year_month_day ymd1(year(1970), month(1), day(1)); 
+                    year_month_day ymd2(1970y / January / 1d);
+                    year_month_day ymd3(1970y / 1 / 1d);
+                    ...
+                    ```
+                」    
+            ］
+
+            ⑨年月日对象的各种组合方式：［i:由于涉及到年月日的组合只有以下几种形式有效——year/month、month/day、day/month、year_month/day、month_day/year、year/month_day（记忆方式——不可跨级别和倒序、day/month 和month_day/year 除外），因此将年月日组合为一个完整日期的有效形式如下］［b:
+                ```c++
+                year/month/day：
+                    a. 首先 year/month 得到 year_month，然后与 day 组合得到 year_month_day；
+                    b. year 可以使用用户定义字面量，但不能使用纯数字、因为“/”没有在 std::chrono 或全局范围中被重载；
+                    c. month 可以使用预定义的对象，也可以使用纯数字、因为 year 的“/”运算符支持纯数字月份；
+                    d. day 可以使用用户定义字面量，也可以使用纯数字、因为 year_month 的“/”运算符支持纯数字日期；
+                month/day/year：
+                    a. 首先 month/day 得到 month_day，然后与 year 组合得到 year_month_day；
+                    b. month 可以使用预定义的对象，但不能使用纯数字、因为“/”没有在 std::chrono 或全局范围中被重载；
+                    c. day 可以使用用户定义字面量，也可以使用纯数字、因为 month 的“/”运算符支持纯数字月份；
+                    d. year 可以使用用户定义字面量，也可以使用纯数字、因为 month_day 的“/”运算符支持纯数字年份；
+                day/month/year：
+                    a. 首先 day/month 得到 month_day，然后与 year 组合得到 year_month_day；
+                    b. day 可以使用用户定义字面量，但不能使用纯数字、因为“/”没有在 std::chrono 或全局范围中被重载；
+                    c. month 可以使用预定义的对象，也可以使用纯数字、因为 day 的“/”运算符支持纯数字月份；
+                    d. year 可以使用用户定义字面量，也可以使用纯数字、因为 month_day 的“/”运算符支持纯数字年份；
+                year/(month/day)：
+                    a. 首先 month/day 得到 month_day，然后 year 与之组合得到 year_month_day；
+                    b. year 可以使用用户定义字面量，但不能使用纯数字、因为“/”没有在 std::chrono 或全局范围中被重载；
+                    c. month 可以使用预定义的对象，但不能使用纯数字、因为“/”没有在 std::chrono 或全局范围中被重载；
+                    d. day 可以使用用户定义字面量，也可以使用纯数字、因为 month 的“/”运算符支持纯数字日期；
+                year/(day/month)：
+                    a. 首先 day/month 得到 month_day，然后 year 与之组合得到 year_month_day；
+                    b. year 可以使用用户定义字面量，但不能使用纯数字、因为“/”没有在 std::chrono 或全局范围中被重载；
+                    c. day 可以使用用户定义字面量，但不能使用纯数字、因为“/”没有在 std::chrono 或全局范围中被重载；
+                    d. month 可以使用预定义的对象，也可以使用纯数字、因为 day 的“/”运算符支持纯数字月份；
+                year_month/day：
+                    参考 year/month/day；
+                month_day/year：
+                    参考 month/day/year 或 day/month/year；
+                year/month_day：
+                    参考 year/(month/day) 或 year/(day/month)；
+
+                其他无效组合及其无效原因如下：
+                year/day/month：year 的“/”运算符不能直接跟 day（跨级别）；
+                month/year/day：month 的“/”运算符不能直接跟 year（倒序）； 
+                month/(day/year)：day 的“/”运算符不能直接跟 year（跨级别）； 
+                month/(year/day)：year 的“/”运算符不能直接跟 day（跨级别）；
+                day/year/month：day 的“/”运算符不能直接跟 year（跨级别）； 
+                day/(month/year)：month 的“/”运算符不能直接跟 year（倒序）； 
+                day/(year/month)：day 的“/”运算符不能直接跟 year_month（day 在前时只能与 month 倒序）；
+                ```
+                「i:例如」「b:
+                ```c++
+                using namespace std::chrono;
+                using namespace std::chrono_literals;
+
+                year y(2025); 
+                month m(1); 
+                day d(12);
+                year_month_day date;
+                
+                date = y/m/d; // √
+                date = y/d/m; // ×，不允许 year/day 组合（跨级别）
+                date = d/y/m; // ×，不允许 day/year 组合（跨级别）
+                date = d/m/y; // √
+                date = m/d/y; // √ 
+                date = m/y/d; // ×，不允许 month/year 组合（倒序）
+
+                date = 2025y/January/12d;  // √
+                date = 2025y/1/12d;        // √
+                date = 2025y/January/12 ;  // √
+                date = 2025y/1/12;         // √
+
+                date = 2025y/12d/January;  // ×，不允许 year/day 组合（跨级别）
+                date = 2025y/12d/1;        // ×，不允许 year/day 组合（跨级别）
+                date = 2025y/12/January;   // ×，year_month/month 组合无意义
+                date = 2025y/12/1;         // √
+
+                date = January/2025y/12d;  // ×，不允许 month/year 组合（倒序）
+                date = January/2025y/12;   // ×，不允许 month/year 组合（倒序）
+                date = January/2025/12d;   // ×，month_day/day 组合无意义
+                date = January/2025/12;    // √，但它不代表 2025/1/12，而是 12/1/2025 这个无效日期
+
+                date = January/12d/2025y;  // √
+                date = January/12/2025y;   // √
+                date = January/12d/2025;   // √
+                date = January/12/2025;    // √
+                
+                date = 12d/2025y/January;  // ×，不允许 day/year 组合（跨级别）
+                date = 12d/2025y/1;        // ×，不允许 day/year 组合（跨级别）
+                date = 12d/2025/January;   // ×，month_day/month 组合无意义 
+                date = 12d/2025/1;         // √，但它不代表 2025/1/1，而是 1/2025/12 这个无效日期
+
+                date = 12d/January/2025y;  // √
+                date = 12d/January/2025;   // √
+                date = 12d/1/2025y;        // √
+                date = 12d/1/2025;         // √
+                ```
+            」］
+
+            ⑩month_weekday 类型与对象定义：［i:其对象表示月与 Weekday 的组合日期（如 1 月的第一个星期一）；常用的对象定义方式有以下两种（除此之外还支持默认构造、拷贝构造、其他可能的格式的移动构造）］［b:
+                ```c++
+                using namespace std::chrono;
+                using namespace std::chrono_literals;
+
+                // 1. 有参构造 
+                month_weekday mwd(month对象, weekday_indexed对象); // 有参构造
+                
+                // 2. 先通过 month 对象重载的“/”运算符与 weekday_indexed 对象组合为一个 month_weekday 对象，然后利用移动构造函数创建 month_weekday 对象
+                month_weekday mwd(month对象 / weekday_indexed对象);
+                ```
+                其中 month 对象和 weekday 对象都可以使用预定义的对象；「i:例如」
+                「b:
+                    ```c++
+                    using namespace std::chrono;
+
+                    // 1 月第一个星期一
+                    month_weekday mwd1(month(1), weekday_indexed(weekday(1), 1)); 
+                    month_weekday mwd2(January / Monday[1]);
+                    ```
+                」    
+            ］
+
+
+            ⑪year_month_weekday 类型及对象定义：［i:其对象表示年月 weekday 的组合日期（如 1970 年 1 月第一个星期一）；常用的对象定义方式有以下两种（除此之外还支持默认构造、拷贝构造、其他可能的格式的移动构造）］［b:
+                ```c++
+                using namespace std::chrono;
+                using namespace std::chrono_literals;
+
+                // 1. 有参构造 
+                year_month_weekday ymwd(year对象, month对象, weekday_indexed对象);
+                year_month_weekday ymwd(sys_days对象);
+                year_month_weekday ymwd(local_days对象);
+                
+                // 2. 先通过重载的“/”运算符将 year、month、weekday_indexed、month_weekday、year_month、纯数字组合为 year_month_weekday 对象，然后利用移动构造函数创建 year_month_weekday 对象
+                year_month_weekday ymwd(各种可能的年月日组合);
+                ```
+                其中 year、month 和 weekday_indexed 对象都可以使用用户定义字面量或预定义的对象；「i:例如」
+                「b:
+                    ```c++
+                    using namespace std::chrono;
+                    using namespace std::chrono_literals;
+
+                    // 1970 年 1 月 1 日
+                    year_month_weekday ymwd1(year(1970), month(1), weekday_indexed(weekday(1), 1)); 
+                    year_month_weekday ymwd2(1970y / January / Monday[2]);
+                    year_month_weekday ymwd3(1970y / 1 / Tuesday[3]);
+                    ...
+                    ```
+                」    
+            ］
+
+
+            ⑫年月周几对象的各种组合方式：［i:由于涉及到年和月和周几的组合只有以下几种形式有效——year/month、month/weekday_indexed、weekday_indexed/month、year_month/weekday_indexed、month_weekday/year、year/month_weekday（记忆方式——不可跨级别和倒序、weekday_indexed/month 和month_weekday/year 除外），因此将年月日组合为一个完整日期的有效形式如下］［b:
+                ```c++
+                year/month/weekday_indexed：
+                    a. 首先 year/month 得到 year_month，然后与 weekday_indexed 组合得到 year_month_weekday；
+                    b. year 可以使用用户定义字面量，但不能使用纯数字、因为“/”没有在 std::chrono 或全局范围中被重载；
+                    c. month 可以使用预定义的对象，也可以使用纯数字、因为 year 的“/”运算符支持纯数字月份；
+                    d. weekday_indexed 可以使用用户定义字面量；
+                month/weekday_indexed/year：
+                    a. 首先 month/weekday_indexed 得到 month_weekday，然后与 year 组合得到 year_month_weekday；
+                    b. month 可以使用预定义的对象，但不能使用纯数字、因为“/”没有在 std::chrono 或全局范围中被重载；
+                    c. weekday_indexed 可以使用预定义的对象；
+                    d. year 可以使用用户定义字面量，也可以使用纯数字、因为 month_day 的“/”运算符支持纯数字年份；
+                weekday_indexed/month/year：
+                    a. 首先 weekday_indexed/month 得到 month_weekday，然后与 year 组合得到 year_month_weekday；
+                    b. weekday_indexed 可以使用用户定义字面量；
+                    c. month 可以使用预定义的对象，也可以使用纯数字、因为 weekday_indexed 的“/”运算符支持纯数字月份；
+                    d. year 可以使用用户定义字面量，也可以使用纯数字、因为 month_weekday 的“/”运算符支持纯数字年份；
+                year/(month/weekday_indexed)：
+                    a. 首先 month/weekday_indexed 得到 month_weekday，然后 year 与之组合得到 year_month_weekday；
+                    b. year 可以使用用户定义字面量，但不能使用纯数字、因为“/”没有在 std::chrono 或全局范围中被重载；
+                    c. month 可以使用预定义的对象，但不能使用纯数字、因为“/”没有在 std::chrono 或全局范围中被重载；
+                    d. weekday_indexed 可以使用预定义的对象；
+                year/(weekday_indexed/month)：
+                    a. 首先 weekday_indexed/month 得到 month_weekday，然后 year 与之组合得到 year_month_weekday；
+                    b. year 可以使用用户定义字面量，但不能使用纯数字、因为“/”没有在 std::chrono 或全局范围中被重载；
+                    c. weekday_indexed 可以使用预定义的对象；
+                    d. month 可以使用预定义的对象，也可以使用纯数字、因为 weekday_indexed 的“/”运算符支持纯数字月份；
+                year_month/weekday_indexed：
+                    参考 year/month/weekday_indexed；
+                month_weekday/year：
+                    参考 month/weekday_indexed/year 或 weekday_indexed/month/year；
+                year/month_weekday：
+                    参考 year/(month/weekday_indexed) 或 year/(weekday_indexed/month)；
+
+                其他无效组合及其无效原因如下：
+                year/weekday_indexed/month：year 的“/”运算符不能直接跟 weekday_indexed（跨级别）；
+                month/year/weekday_indexed：month 的“/”运算符不能直接跟 year（倒序）； 
+                month/(weekday_indexed/year)：weekday_indexed 的“/”运算符不能直接跟 year（跨级别）； 
+                month/(year/weekday_indexed)：year 的“/”运算符不能直接跟 weekday_indexed（跨级别）；
+                weekday_indexed/year/month：weekday_indexed 的“/”运算符不能直接跟 year（跨级别）； 
+                weekday_indexed/(month/year)：month 的“/”运算符不能直接跟 year（倒序）； 
+                weekday_indexed/(year/month)：weekday_indexed 的“/”运算符不能直接跟 year_month（day 在前时只能与 month 倒序）；
+                ```
+                「i:例如」「b:
+                ```c++
+                using namespace std::chrono;
+                using namespace std::chrono_literals;
+
+                year y(2025); 
+                month m(1); 
+                weekday_indexed wd(Tuesday[2]);
+                year_month_weekday date;
+                
+                date = y/m/wd; // √
+                date = y/wd/m; // ×，不允许 year/week_indexed 组合（跨级别）
+                date = wd/y/m; // ×，不允许 weekday_indexed/year 组合（跨级别）
+                date = wd/m/y; // √
+                date = m/wd/y; // √ 
+                date = m/y/wd; // ×，不允许 month/year 组合（倒序）
+
+                date = 2025y/January/Monday[2];  // √
+                date = 2025y/1/Monday[2];        // √
+
+                date = 2025y/Monday[2]/January;  // ×，不允许 year/weekday_indexed 组合（跨级别）
+                date = 2025y/Monday[2]/1;        // ×，不允许 year/weekday_indexed 组合（跨级别）
+
+                date = January/2025y/Monday[2];  // ×，不允许 month/year 组合（倒序）
+                date = January/2025/Monday[2];   // ×，month_day/weekday_indexed 组合无意义
+
+                date = January/Monday[2]/2025y;  // √
+                date = January/Monday[2]/2025;   // √
+                
+                date = Monday[2]/2025y/January;  // ×，不允许 weekday_indexed/year 组合（跨级别）
+                date = Monday[2]/2025y/1;        // ×，不允许 week_indexed/year 组合（跨级别）
+                date = Monday[2]/2025/January;   // ×，month_weekday/month 组合无意义 
+                date = Monday[2]/2025/1;         // √，但它不代表 2025/1/第二个星期一，而是 1/2025/第二个星期一 这个无效日期
+
+                date = Monday[2]/January/2025y;  // √
+                date = Monday[2]/January/2025;   // √
+                date = Monday[2]/1/2025y;        // √
+                date = Monday[2]/1/2025;         // √
+                ```
+            」］
+
+            ⑬判断一个年份是否是闰年：［i:通过`is_leap()`方法；「i:例如」］［b:「b:
+                ```c++
+                std::chrono::year y(2026);
+                std::cout &lt;&lt; std::boolalpha &lt;&lt; y.is_leap() &lt;&lt; std::endl;
+                // 输出 false
+                ```
+            」］
+
+            ⑭判断对象是否为上述有效日期类型：［i:通过`ok()`方法；「i:例如」］［b:「b:
+                ```c++
+                auto date1{Monday[2]/2025/1};
+                auto date2{Monday[2]/1/2025};
+
+                std::cout &lt;&lt; std::boolalpha &lt;&lt; date1.ok() &lt;&lt; " " &lt;&lt; date2.ok() &lt;&lt; std::endl;
+                // 输出 false、true
+                ```
+            」］
+
+            
+            ⑮各种 last 类型及对象定义：［b:
+                ```c++
+                weekday_last: 
+                    含义：其对象代表最后一个星期几；单独使用它没意义，必须与月份和年份一起使用；
+                    对象定义常用方式：
+                        weekday_last wl(weekday对象); // 其中 weekday 对象可以使用预定义的对象；
+                        weekday_last wl(weekday对象[last]); // 其中 weekday 对象可以使用预定义的对象，“weekday对象[last]”表示先产生一个 weekday_last 右值对象、然后通过移动构造函数创建新对象，last 也是预定义的对象、重载的“[]”运算符只要遇到它做为参数就会返回对应的 weekday_last 右值对象
+                    其他构造：
+                        拷贝构造
+                        移动构造
+                    举例：
+                        // 最后一个周二
+                        weekday_last wl(weekday(2)); 
+                        weekday_last wl(Tuesday);
+                        weekday_last wl(Tuesday[last]);
+                month_day_last:
+                    含义：其对象代表一个月的最后一天（28(非闰年)/29(闰年)/30/31号）；单独使用它没意义，必须与年份结合使用；
+                    对象定义常用方式：
+                        month_day_last mdl(month对象); // 其中 month 对象可以使用预定义的对象； 
+                        month_day_last mdl(month对象 / last); // 其中 month 对象可以使用预定义的对象，“month对象 / last”表示先产生一个 month_day_last 右值对象、然后通过移动构造函数构造新对象,last 也是预定义的对象、重载的“/”运算符只要遇到它做为参数就会返回对应的 month_day_last 右值对象
+                    其他构造：
+                        拷贝构造
+                        移动构造
+                    举例：
+                        // 二月的最后一天
+                        month_day_last mdl(month(2));
+                        month_day_last mdl(February); 
+                        month_day_last mdl(February / last);
+                month_weekday_last：
+                    含义：其对象代表一个月的最后一个星期几；单独使用它没意义，必须结合年份使用；
+                    对象常用定义方式：
+                        month_weekday_last mwdl(month对象, weekday_last对象); // 其中 month 对象可以使用预定义的对象； 
+                        month_weekday_last mwdl(month对象, weekday对象[last]); // 其中 month、weekday 对象可以使用预定义的对象； 
+                    其他构造：
+                        拷贝构造
+                        移动构造
+                    举例：
+                        // 1 月份的最后一个星期五
+                        month_weekday_last mwdl1(month(1), weekday_last(weekday(5)));
+                        month_weekday_last mwdl2(January, Friday[last]);
+                        ...
+                year_month_day_last：
+                    含义：其对象代表某年某月的最后一天；
+                    对象常用定义方式：
+                        year_month_day_last ymdl(year对象, month_day_last对象); // 其中 year 对象可以使用用户定义字面量 
+                        year_month_day_last ymdl(year对象, month对象 / last); // 其中 year 对象可以使用用户定义字面量、month 对象可以使用预定义的对象
+                        year_month_day_last ymdl(year对象 / month对象 / last); // 其中 year 对象可以使用用户定义字面量、month 对象可以使用预定义的对象，“year对象 / month对象 / last”会先产生返回一个右值 year_month_day_last 对象、然后通过移动构造函数创建新对象
+                    其他构造：
+                        拷贝构造
+                        移动构造
+                    举例：
+                        // 1970 年 2 月份的最后一天
+                        year_month_day_last ymdl1(year(1970), month_day_last(month(2)));
+                        year_month_day_last ymdl2(1970y, February / last);
+                        year_month_day_last ymdl3(1970y / February / last);
+                        ...
+                year_month_weekday_last：
+                    含义：其对象代表某年某月的最后一个星期几；
+                    对象常用定义方式：
+                        year_month_weekday_last ymdl(year对象, month对象, weekday_last对象); // 其中 year 对象可以使用用户定义字面量、month 对象可以使用预定义的对象
+                        year_month_day_last ymdl(year对象 / month_weekday_last); // 其中 year 对象可以使用用户定义字面量，，“year对象 / month_week_day_last”会先产生返回一个右值 year_month_weekday_last 对象、然后通过移动构造函数创建新对象
+                        year_month_day_last ymdl(year对象 / month对象 / weekday_last对象); // 其中 year 对象可以使用用户定义字面量、month 对象可以使用预定义的对象，“year对象 / month对象 / weekday_last”会先产生返回一个右值 year_month_weekday_last 对象、然后通过移动构造函数创建新对象
+                        year_month_day_last ymdl(year对象 / month对象 / weekday对象[last]); // 其中 year 和 weekday 对象可以使用用户定义字面量、month 对象可以使用预定义的对象，“year对象 / month对象 / weekday对象[last]”会先产生返回一个右值 year_month_weekday_last 对象、然后通过移动构造函数创建新对象
+                    其他构造：
+                        拷贝构造
+                        移动构造
+                    举例：
+                        // 1970 年 2 月份的最后一个星期五 
+                        year_month_weekday_last ymwdl1(year(1970), month(2), weekday_last(weekday(2)));
+                        year_month_weekday_last ymwdl2(1970y, February, Friday[last]);
+                        year_month_weekday_last ymwdl3(1970y / February / last);
+                        ...
+                ```
+            ］
+
+
+            ⑯days/months/years 类型、对象定义、以及支持哪些运算、各自的意义是什么：［b:
+                ```c++
+                days 类型
+                    含义：其对象代表指定天数的时间间隔，本质是 std::chrono::duration 类型；
+                    对象定义：std::chrono::days ds(天数);
+                    支持的运算：加（求天数之和）、减（求天数之差）、比较>=/&lt;=/==/!=/>/&lt;（比较两个天数谁长谁短或是否相等）
+                    举例：std::chrono::days ds(3); // ds 表示三天
+                months 类型
+                    含义：其对象代表指定月数的时间间隔，本质是 std::chrono::duration 类型；
+                    对象定义：std::chrono::months ds(月数);
+                    支持的运算：加（求月数之和）、减（求月数之差）、比较>=/&lt;=/==/!=/>/&lt;（比较两个月数谁长谁短或是否相等）
+                    举例：std::chrono::months ms(3); // ms 表示三个月
+                years 类型
+                    含义：其对象代表指定年数的时间间隔，本质是 std::chrono::duration 类型；
+                    对象定义：std::chrono::years ys(年数);
+                    支持的运算：加（求年数之和）、减（求年数之差）、比较>=/&lt;=/==/!=/>/&lt;（比较两个年数谁长谁短或是否相等）
+                    举例：std::chrono::years ds(3); // ys 表示三年
+                ```
+            ］
+
+            ⑱以上类型能否表示一个完整日期：［i:不能；还缺少时区信息，必须借助 sys_days 和 local_days 为之附加时区信息才能表示一个完整日期；］
+
+            ⑲sys_days 类型本质/对象定义/运算：［i:sys_days 表示一个零时区（UTC）的时间精度为天的系统时间点］［b:
+                &emsp;&nbsp;a. 本质：本质是以下 time_point 具体类型
+                ```c++
+                std::chrono::time_point&lt;std::chrono::system_clock, std::chrono::days&gt; 
+                ```
+                &emsp;&nbsp;b. 对象定义：一般用三元日期类型对象初始化（拷贝或移动）；首先会发生三元日期类型到 sys_days 的隐式类型转换，然后通过移动构造函数创建新对象；<br>
+                &emsp;&nbsp;c. 支持的运算：
+                ```c++
+                
+                ``` 
+                「i:例如」「b:
+                    ```c++
+                    using namespace std::chrono_literals;
+                    using namespace std::chrono;
+
+                    sys_days sds;
+
+                    /* 
+                        可以从以下三元日期类型创建
+                        year_month_day
+                        year_month_weekday
+                        year_month_day_last 
+                        year_month_weekday_last 
+                        以上类型会先转换为 sys_days 类型，然后通过移动构造函数创建新对象
+                    */
+                    sds = 2025y / January / 12d;
+                    sds = 2025y / January / Monday[1];
+                    sds = 2025y / January / last;
+                    sds = 2025y / January / Monday[last];
+                    ```
+                」
+            ］
+
+            ⑨days, months, years, sys_days、输出到六 day(),month(),...：
+
+
+        7) 时间日期处理的实际应用场景：
+            ①计算某过程执行时间：［b:
+                ```c++
+                // 以测量打印 1000 次指定字符串消耗的时间为例
+
+                // 1. 调用 steady_clock::now() 获取目标过程开始时的时间点
+                std::chrono::time_point&lt;std::chrono::steady_clock&gt; tp1 = std::chrono::steady_clock::now();
+                
+                // 2. 目标过程
+                for (int i = 0; i &lt; 1000; ++i) {
+                    std::cout &lt;&lt; "Hello world!" &lt;&lt; std::endl;
+                }
+
+                // 3. 调用 steady_clock::now() 获取目标过程结束时的时间点
+                std::chrono::time_point&lt;std::chrono::steady_clock&gt; tp2 = std::chrono::steady_clock::now();
+
+                // 4. 两个时间点相减得到时间间隔
+                std::chrono::nanoseconds dur{tp2 - tp1};
+
+                // 5. 通过 count() 方法获取时间间隔数值
+                std::cout &lt;&lt; tp2.count() &lt;&lt; "ns" &lt;&lt; std::endl;
+                ```
+            ］
+
+            ②计算某过程执行时间、RAII 风格：［b:
+                ```c++
+                #include &lt;iostream&gt;
+                #include &lt;chrono&gt;
+                #include &lt;functional&gt;
+                #include &lt;thread&gt;
+                
+                // 1. 定义一个计时器类、创建该类的对象时启动计时、对象销毁时结束计时并执行用户自定义的程序（如打印时间间隔）
+                class Timer {
+                private:
+                    std::chrono::time_point&lt;std::chrono::steady_clock&gt; _tp0;
+                    std::function&lt;void(std::chrono::nanoseconds)&gt; _callback;
+                public:
+                    Timer(std::function&lt;void(std::chrono::nanoseconds)&gt; callback) :
+                        _tp0(std::chrono::steady_clock::now()),
+                        _callback(callback)
+                    {}
+                    ~Timer() {
+                        std::chrono::time_point&lt;std::chrono::steady_clock&gt; tp{std::chrono::steady_clock::now()};
+                        std::chrono::nanoseconds dur{tp - _tp0};
+                        _callback(dur);
+                    }
+                };
+
+                int main(int argc, char** argv) 
+                {
+                    {
+                        // 2. 在目标过程开始之前定义定时器对象、同时指定目标过程执行结束时的自定义程序（如打印时间间隔）
+                        Timer timer([](std::chrono::nanoseconds dur) {
+                            std::chrono::milliseconds ms{std::chrono::duration_cast&lt;std::chrono::milliseconds&gt;(dur)}; // 强制类型转换
+                            std::cout &lt;&lt; ms.count() &lt;&lt; "ms" &lt;&lt; std::endl;
+                        });
+
+                        // 3. 将目标过程和步骤 2 放在一个块级作用域中
+                        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    }
+
+                    return 0;
+                }
+                ```
+            ］
+
+            ③日期查询（如 2025 最后的周五是几号）：
+    
+        <h3>3. 有关日期的时间点和时间间隔类型</h3>
+        1) 日期时间间隔类型/含义/本质：［i:三种与日期相关的时间间隔类型及其含义如下<br>
+            &emsp;&nbsp;a. days：表示天数、本质为时间精度为天（24h 或 1440min 等）的 duration 类型；<br>
+            &emsp;&nbsp;b. weeks：表示周数、本质为时间精度为周（7 天）的 duration 类型；<br>
+            &emsp;&nbsp;c. months：表示月数、本质为时间精度为月（28/29/30/31 天）的 duration 类型；<br>
+            &emsp;&nbsp;d. years：表示年数、本质为时间精度为年（12 个月或 365/366 天）的 duration 类型；
+        ］
+
+
+        2) days 对象的定义和初始化：
+            ①直接创建代表 N 天的 days 对象：［i:直接调用有参构造］［b:
+                ```c++
+                days 对象名(N);
+                days 对象名{N};
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    days ds1(3); // 三天
+                    days ds2{3}; // 三天
+                    ```
+                」
+            ］
+
+            ②形如“days d = 1”是否合法：［i:不合法，因为从整数到 days 的转换构造函数带有 explicit 修饰，不允许隐式类型转换，只能显式调用构造函数；］
+
+            ③从更细时间精度的时间间隔对象创建：［i:先强制类型转换（duration_cast/ceil/floor/round），然后调用移动构造函数］［b:
+                ```c++
+                days 对象名(duration_cast/ceil/floor/round&lt;days&gt;(更细时间精度的时间间隔对象));
+                days 对象名{duration_cast/ceil/floor/round&lt;days&gt;(更细时间精度的时间间隔对象)};
+                days 对象名 = duration_cast/ceil/floor/round&lt;days&gt;(更细时间精度的时间间隔对象);
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    days ds1(duration_cast&lt;days&gt;(hours(42))); // 一天
+                    days ds2(floor&lt;days&gt;(hours(42))); // 一天
+                    days ds3(ceil&lt;days&gt;(hours(42))); // 两天
+                    days ds4(round&lt;days&gt;(hours(36))); // 两天
+
+                    std::cout &lt;&lt; std::boolalpha
+                        &lt;&lt; (ds1 == days(1)) &lt;&lt; " "
+                        &lt;&lt; (ds2 == days(1)) &lt;&lt; " "
+                        &lt;&lt; (ds3 == days(2)) &lt;&lt; " "
+                        &lt;&lt; (ds4 == days(2));
+                    ```
+                」
+            ］
+
+            ④从更粗时间精度的时间间隔对象创建：［i:存在以下两种情况<br>
+                &emsp;&nbsp;a. 若它代表的天数是确定的，如 weeks，则可以直接调用有参构造；<br>
+                &emsp;&nbsp;b. 若它代表的天数不是确定的，如 months、years（一个月可能有 28/29/30/31 天、一年可能有 365/366 天），则需要先强制转换为 days 类型（duration_cast/ceil/floor/round），再调用移动构造函数；注意将 months 转换为 weeks 时，一个月按照平均月来算（30.436875 天）；将 years 转换为 weeks 时，一年按照平局年来算（365.2425 天）；］［b:
+                ```c++
+                days 对象名(更粗时间精度且为确定天数的时间间隔对象);
+                days 对象名{更粗时间精度且为确定天数的时间间隔对象};
+                days 对象名 = 更粗时间精度且为确定天数的时间间隔对象;
+
+                days 对象名(duration_cast/ceil/floor/round&lt;days&gt;(更粗时间精度但不确定天数的时间间隔对象));
+                days 对象名{duration_cast/ceil/floor/round&lt;days&gt;(更粗时间精度但不确定天数的时间间隔对象)};
+                days 对象名 = duration_cast/ceil/floor/round&lt;days&gt;(更粗时间精度但不确定天数的时间间隔对象);
+
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    days ds1(weeks(1));
+                    days ds2(weeks(2));
+
+                    days ds3(duration_cast&lt;days>(months(1))); // 30 天
+                    days ds4(floor&lt;days>(months(1))); // 30 天 
+                    days ds5(ceil&lt;days>(months(1))); // 31 天
+                    days ds6(round&lt;days>(months(1))); // 30 天 
+
+                    days ds7(duration_cast&lt;days>(months(2))); // 60 天
+                    days ds8(floor&lt;days>(months(2))); // 60 天 
+                    days ds9(ceil&lt;days>(months(2))); // 61 天
+                    days ds10(round&lt;days>(months(2))); // 61 天
+
+                    days ds11(duration_cast&lt;days>(years(1))); // 365 天
+                    days ds12(floor&lt;days>(years(1))); // 365 天 
+                    days ds13(ceil&lt;days>(years(1))); // 366 天
+                    days ds14(round&lt;days>(years(1))); // 365 天
+
+                    days ds15(duration_cast&lt;days>(years(3))); // 365*3 天
+                    days ds16(floor&lt;days>(years(3))); // 365*3 天 
+                    days ds17(ceil&lt;days>(years(3))); // 365*3+1 天
+                    days ds18(round&lt;days>(years(3))); // 365*3+1 天
+                    
+                    std::cout &lt;&lt; std::boolalpha
+                        &lt;&lt; (ds1 == days(7)) &lt;&lt; " "
+                        &lt;&lt; (ds2 == days(14)) &lt;&lt; " "
+
+                        &lt;&lt; (ds3 == days(30)) &lt;&lt; " "
+                        &lt;&lt; (ds4 == days(30)) &lt;&lt; " "
+                        &lt;&lt; (ds5 == days(31)) &lt;&lt; " "
+                        &lt;&lt; (ds6 == days(30)) &lt;&lt; " "
+
+                        &lt;&lt; (ds7 == days(60)) &lt;&lt; " "
+                        &lt;&lt; (ds8 == days(60)) &lt;&lt; " "
+                        &lt;&lt; (ds9 == days(61)) &lt;&lt; " "
+                        &lt;&lt; (ds10 == days(61)) &lt;&lt; " "
+
+                        &lt;&lt; (ds11 == days(365)) &lt;&lt; " "
+                        &lt;&lt; (ds12 == days(365)) &lt;&lt; " "
+                        &lt;&lt; (ds13 == days(365)) &lt;&lt; " "
+                        &lt;&lt; (ds14 == days(365)) &lt;&lt; " "
+
+                        &lt;&lt; (ds15 == days(365 * 3)) &lt;&lt; " "
+                        &lt;&lt; (ds16 == days(365 * 3)) &lt;&lt; " "
+                        &lt;&lt; (ds17 == days(365 * 3 + 1)) &lt;&lt; " "
+                        &lt;&lt; (ds18 == days(365 * 3 + 1)) &lt;&lt; " "
+                        &lt;&lt; std::endl;
+                    ```
+                」
+            ］
+
+            ⑤能否从日历类型对象创建：［i:不能，「i:例如」］［b:「b:
+                ```c++
+                days d(1d);
+                ```
+                是非法的；」
+            ］
+
+            ⑥从其他 days 对象创建：［i:拷贝构造或移动构造；「i:例如」］［b:「b:
+                ```c++
+                // 拷贝构造
+                days 对象名(左值days对象);
+                days 对象名{左值days对象};
+                days 对象名 = 左值days对象;
+
+                // 移动构造
+                days 对象名(std::move(左值days对象));
+                days 对象名{std::move(左值days对象)};
+                days 对象名 = std::move(左值days对象);
+
+                days 对象名(右值days对象);
+                days 对象名{右值days对象};
+                days 对象名 = 右值days对象;
+                ```
+            」］
+
+        
+        3) weeks 对象的定义和初始化：
+            ①直接创建代表 N 周的 weeks 对象：［i:直接调用有参构造］［b:
+                ```c++
+                weeks 对象名(N);
+                weeks 对象名{N};
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    weeks ws1(3); // 三周
+                    weeks ws2{3}; // 三周
+                    ```
+                」
+            ］
+
+            ②形如“days d = 3”是否合法：［i:不合法，因为从整数到 weeks 的转换构造函数带有 explicit 修饰，不允许隐式类型转换，只能显式调用构造函数；］
+
+            ③从更细时间精度的时间间隔对象创建：［i:先强制类型转换（duration_cast/ceil/floor/round），然后调用移动构造函数］［b:
+                ```c++
+                weeks 对象名(duration_cast/ceil/floor/round&lt;weeks&gt;(更细时间精度的时间间隔对象));
+                weeks 对象名{duration_cast/ceil/floor/round&lt;weeks&gt;(更细时间精度的时间间隔对象)};
+                weeks 对象名 = duration_cast/ceil/floor/round&lt;weeks&gt;(更细时间精度的时间间隔对象);
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    weeks ws1(duration_cast&lt;weeks&gt;(hours(24 * 8))); // 一周 
+                    weeks ws2(floor&lt;weeks&gt;(hours(24 * 8))); // 一周
+                    weeks ws3(ceil&lt;weeks&gt;(hours(24 * 8))); // 两周
+                    weeks ws4(round&lt;weeks&gt;(hours(24 * 8))); // 一周
+
+                    std::cout &lt;&lt; std::boolalpha
+                        &lt;&lt; (ws1 == weeks(1)) &lt;&lt; " "
+                        &lt;&lt; (ws2 == weeks(1)) &lt;&lt; " "
+                        &lt;&lt; (ws3 == weeks(2)) &lt;&lt; " "
+                        &lt;&lt; (ws4 == weeks(1));
+                    ```
+                」
+            ］
+
+            ④从更粗时间精度的时间间隔对象创建：［i:需要先强制转换为 weeks 类型（duration_cast/ceil/floor/round），再调用移动构造函数；注意将 months 转换为 weeks 时，一个月按照平均月来算（30.436875 天）；将 years 转换为 weeks 时，一年按照平局年来算（365.2425 天）；］［b:
+                ```c++
+                weeks 对象名(duration_cast/ceil/floor/round&lt;weeks&gt;(更粗时间精度的时间间隔对象));
+                weeks 对象名{duration_cast/ceil/floor/round&lt;weeks&gt;(更粗时间精度的时间间隔对象)};
+                weeks 对象名 = duration_cast/ceil/floor/round&lt;weeks&gt;(更粗时间精度的时间间隔对象);
+
+                ```
+                「b:例如
+                    ```c++
+                    using namespace chrono;
+
+                    weeks ws1(duration_cast&lt;weeks>(months(1)));
+                    weeks ws2(floor&lt;weeks>(months(1)));
+                    weeks ws3(ceil&lt;weeks>(months(1)));
+                    weeks ws4(round&lt;weeks>(months(1)));
+
+                    weeks ws5(duration_cast&lt;weeks>(years(1)));
+                    weeks ws6(floor&lt;weeks>(years(1)));
+                    weeks ws7(ceil&lt;weeks>(years(1)));
+                    weeks ws8(round&lt;weeks>(years(1)));
+
+                    weeks ws9(duration_cast&lt;weeks>(months(2)));
+                    weeks ws10(floor&lt;weeks>(months(2)));
+                    weeks ws11(ceil&lt;weeks>(months(2)));
+                    weeks ws12(round&lt;weeks>(months(2)));
+
+                    std::cout &lt;&lt; std::boolalpha
+                        &lt;&lt; (ws1 == weeks(4)) &lt;&lt; " "
+                        &lt;&lt; (ws2 == weeks(4)) &lt;&lt; " "
+                        &lt;&lt; (ws3 == weeks(5)) &lt;&lt; " "
+                        &lt;&lt; (ws4 == weeks(4)) &lt;&lt; " "
+
+                        &lt;&lt; (ws5 == weeks(52)) &lt;&lt; " "
+                        &lt;&lt; (ws6 == weeks(52)) &lt;&lt; " "
+                        &lt;&lt; (ws7 == weeks(53)) &lt;&lt; " "
+                        &lt;&lt; (ws8 == weeks(52)) &lt;&lt; " "
+
+                        &lt;&lt; (ws9 == weeks(8)) &lt;&lt; " "
+                        &lt;&lt; (ws10 == weeks(8)) &lt;&lt; " "
+                        &lt;&lt; (ws11 == weeks(9)) &lt;&lt; " "
+                        &lt;&lt; (ws12 == weeks(9)) &lt;&lt; " "
+                        &lt;&lt; std::endl;
+                    ```
+                」
+            ］
+
+            ⑤能否从日历类型对象创建：［i:不能，「i:例如」］［b:「b:
+                ```c++
+                weeks ws(7d);
+                ```
+                是非法的；」
+            ］
+
+            ⑥从其他 weeks 对象创建：［i:拷贝构造或移动构造；「i:例如」］［b:「b:
+                ```c++
+                // 拷贝构造
+                weeks 对象名(左值weeks对象);
+                weeks 对象名{左值weeks对象};
+                weeks 对象名 = 左值weeks对象;
+
+                // 移动构造
+                weeks 对象名(std::move(左值weeks对象));
+                weeks 对象名{std::move(左值weeks对象)};
+                weeks 对象名 = std::move(左值weeks对象);
+
+                weeks 对象名(右值weeks对象);
+                weeks 对象名{右值weeks对象};
+                weeks 对象名 = 右值weeks对象;
+                ```
+            」］
+
+
+        4) months 对象的定义和初始化：
+            ①直接创建代表 N 月的 months 对象：［i:直接调用有参构造］［b:
+                ```c++
+                months 对象名(N);
+                months 对象名{N};
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    months ms1(3); // 三月
+                    months ms2{3}; // 三月
+                    ```
+                」
+            ］
+
+            ②形如“months d = 3”是否合法：［i:不合法，因为从整数到 months 的转换构造函数带有 explicit 修饰，不允许隐式类型转换，只能显式调用构造函数；］
+
+            ③从更细时间精度的时间间隔对象创建：［i:先强制类型转换（duration_cast/ceil/floor/round），然后调用移动构造函数；注意一个月按平均月来算，即 30.436875 天，而不是 30 或 31 天；］［b:
+                ```c++
+                months 对象名(duration_cast/ceil/floor/round&lt;months&gt;(更细时间精度的时间间隔对象));
+                months 对象名{duration_cast/ceil/floor/round&lt;months&gt;(更细时间精度的时间间隔对象)};
+                months 对象名 = duration_cast/ceil/floor/round&lt;months&gt;(更细时间精度的时间间隔对象);
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    months ms1(duration_cast&lt;months&gt;(hours(24 * 30))); // 零月 
+                    months ms2(floor&lt;months&gt;(hours(24 * 30))); // 零月
+                    months ms3(ceil&lt;months&gt;(hours(24 * 30))); // 一月
+                    months ms4(round&lt;months&gt;(hours(24 * 30))); // 一月
+
+                    months ms5(duration_cast&lt;months&gt;(hours(24 * 31))); // 一月
+                    months ms6(floor&lt;months&gt;(hours(24 * 31))); // 一月
+                    months ms7(ceil&lt;months&gt;(hours(24 * 31))); // 两月
+                    months ms8(round&lt;months&gt;(hours(24 * 31))); // 一月
+
+                    std::cout &lt;&lt; std::boolalpha
+                        &lt;&lt; (ms1 == months(0)) &lt;&lt; " "
+                        &lt;&lt; (ms2 == months(0)) &lt;&lt; " "
+                        &lt;&lt; (ms3 == months(1)) &lt;&lt; " "
+                        &lt;&lt; (ms4 == months(1)) &lt;&lt; " "
+
+                        &lt;&lt; (ms5 == months(1)) &lt;&lt; " "
+                        &lt;&lt; (ms6 == months(1)) &lt;&lt; " "
+                        &lt;&lt; (ms7 == months(2)) &lt;&lt; " "
+                        &lt;&lt; (ms8 == months(1)) &lt;&lt; " "
+
+                        &lt;&lt; std::endl;
+                    ```
+                」
+            ］
+
+            ④从更粗时间精度的时间间隔对象创建：［i:需要先强制转换为 months 类型（duration_cast/ceil/floor/round），再调用移动构造函数；注意将 years 转换为 months 时，一个月按照平均月来算（30.436875 天），一年按照平局年来算（365.2425 天）；］［b:
+                ```c++
+                months 对象名(duration_cast/ceil/floor/round&lt;months&gt;(更粗时间精度的时间间隔对象));
+                months 对象名{duration_cast/ceil/floor/round&lt;months&gt;(更粗时间精度的时间间隔对象)};
+                months 对象名 = duration_cast/ceil/floor/round&lt;months&gt;(更粗时间精度的时间间隔对象);
+
+                ```
+                「b:例如
+                    ```c++
+                    using namespace std::chrono;
+
+                    // 注意 365.2425 / 30.436875 正好等于 12
+                    months ms1(duration_cast&lt;months>(years(1)));
+                    months ms2(floor&lt;months>(years(1)));
+                    months ms3(ceil&lt;months>(years(1)));
+                    months ms4(round&lt;months>(years(1)));
+
+                    std::cout &lt;&lt; std::boolalpha
+                        &lt;&lt; (ms1 == months(12)) &lt;&lt; " "
+                        &lt;&lt; (ms2 == months(12)) &lt;&lt; " "
+                        &lt;&lt; (ms3 == months(12)) &lt;&lt; " "
+                        &lt;&lt; (ms4 == months(12)) &lt;&lt; " "
+                        &lt;&lt; std::endl;
+                    ```
+                」
+            ］
+
+            ⑤能否从日历类型对象创建：［i:不能，「i:例如」］［b:「b:
+                ```c++
+                months ms(30d);
+                ```
+                是非法的；」
+            ］
+
+            ⑥从其他 months 对象创建：［i:拷贝构造或移动构造；「i:例如」］［b:「b:
+                ```c++
+                // 拷贝构造
+                months 对象名(左值months对象);
+                months 对象名{左值months对象};
+                months 对象名 = 左值months对象;
+
+                // 移动构造
+                months 对象名(std::move(左值months对象));
+                months 对象名{std::move(左值months对象)};
+                months 对象名 = std::move(左值months对象);
+
+                months 对象名(右值months对象);
+                months 对象名{右值months对象};
+                months 对象名 = 右值months对象;
+                ```
+            」］
+    </article>
+    <script src="js/global.js"></script>
+</body>
